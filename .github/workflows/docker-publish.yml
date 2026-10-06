@@ -1,35 +1,5 @@
 name: Build and publish Docker image
 
-# Publishes the combined frontend+backend image (see Dockerfile) to the
-# GitHub Container Registry, so anyone can run the tool with just:
-#   docker pull ghcr.io/<owner>/<repo>:latest
-#   docker run -p 4000:4000 ghcr.io/<owner>/<repo>:latest
-# No Docker Hub account/secret needed - GITHUB_TOKEN (ambient, no setup) is
-# enough to push to ghcr.io for this repository.
-#
-# If `docker pull` ever comes back "denied" even though the package looks
-# public: that's almost always a stale/expired cached ghcr.io login on the
-# PULLING machine (`docker login ghcr.io` once, then the token expired) -
-# `docker logout ghcr.io` fixes it. If the package itself ever gets created
-# PRIVATE (can happen depending on repo/org defaults): GitHub profile ->
-# Packages -> this image -> Package settings -> Change visibility -> Public.
-#
-# Builds for both linux/amd64 and linux/arm64 (e.g. Apple Silicon) via QEMU
-# emulation - arm64 takes noticeably longer to build than amd64 because of
-# that emulation, this is expected.
-#
-# Every `uses:` below is pinned to a full commit SHA rather than a version
-# tag (e.g. `@v4`) - tags can be moved to point at different commits (by
-# the action's own maintainer, or by an attacker who compromises their
-# account), silently changing what code runs in this workflow with
-# `secrets.GITHUB_TOKEN`'s `packages: write` permission. A SHA is the
-# actual, immutable commit, with the version kept as a trailing `# vX`
-# comment purely for human readability - Dependabot still understands this
-# format and opens PRs bumping the SHA (and the comment) when a new version
-# is released, so this doesn't mean manually tracking updates forever.
-# Each SHA here is the commit `git ls-remote --tags <repo>` resolves that
-# version tag to; re-resolve the same way to verify or bump.
-
 on:
   push:
     branches: [master]
@@ -50,8 +20,6 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Compute lowercase image name
-        # ghcr.io requires an all-lowercase image name; github.repository
-        # usually already is, but this is robust regardless of repo/owner casing.
         id: image
         run: echo "name=$(echo '${{ env.REGISTRY }}/${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
