@@ -58,17 +58,6 @@ cd frontend && npm install && npm run dev   # http://localhost:5173
 No broker handy? `scripts/seed-demo-broker.sh` seeds a small demo setup
 (queues, subscriptions, a wildcard) on a local broker.
 
-## Troubleshooting
-
-- **Broker running on the same machine (bare metal or its own
-  container)?** The Connect screen pre-fills `host.docker.internal` for
-  exactly this - `localhost` inside the app's container is the container
-  itself, not your host.
-- **"Not connected to a broker" right after a successful connect?** Pull
-  `latest` - older images had a session-cookie bug.
-- Connection errors are logged server-side (never the password) -
-  `docker logs <container>` to see why.
-
 ## Build it yourself
 
 ```bash
