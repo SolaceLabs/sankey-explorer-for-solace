@@ -1,4 +1,18 @@
-*/node_modules/
-backend/.env
-*/coverage/
+node_modules/
+.env
+coverage/
+dist/
+dist-ssr/
+*.log
+node_modules/.tmp/
 .DS_Store
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

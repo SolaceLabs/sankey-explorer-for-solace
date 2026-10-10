@@ -34,8 +34,6 @@ that session - never written to disk, never sent anywhere but your broker.
   plaintext locally - handle it like a password file)
 - Flags queues/topic-endpoints with zero subscriptions instead of quietly
   dropping them
-- `GET /api/sankey-edges` exposes the same data as flat rows, for building
-  a Grafana panel (Infinity/JSON datasource + the Sankey panel plugin)
 
 ## How it works
 
@@ -45,14 +43,17 @@ Browser (React)  →  Express backend  →  Solace broker (SEMP v2, read-only)
 
 One instance per customer/workshop, not a shared multi-tenant service. App
 login is optional (`APP_USERNAME` + `APP_PASSWORD_HASH` env vars) - leave
-both unset to run with no login at all. See `backend/.env.example` for
-every available env var (all optional).
+both unset to run with no login at all. See `.env.example` for every
+available env var (all optional).
 
 ## Local development
 
+One npm package, one process - the server also runs the client dev server
+(with hot reload) as middleware, so there's only one command and one port:
+
 ```bash
-cd backend && npm install && npm run dev    # http://localhost:4000
-cd frontend && npm install && npm run dev   # http://localhost:5173
+npm install
+npm run dev   # http://localhost:4000
 ```
 
 No broker handy? `scripts/seed-demo-broker.sh` seeds a small demo setup
