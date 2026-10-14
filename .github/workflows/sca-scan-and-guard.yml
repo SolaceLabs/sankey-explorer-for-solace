@@ -1,0 +1,56 @@
+name: SCA Scan
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+  # Allows the scan to be re-run against trunk without waiting for a push, which
+  # matters when a merge commit carries [skip ci] and produces no run at all.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  # Required by the shared SCA workflow, which declares it. A called workflow
+  # cannot be granted a permission the caller lacks, so removing this fails the
+  # whole run at startup with zero jobs and no annotation.
+  packages: read
+  actions: read
+  statuses: write
+  checks: write
+  pull-requests: write
+
+jobs:
+  sca_scan:
+    uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@c689e87fd881013c2e5009bf6e751b49cae7527b # main
+    with:
+      # .fossa.yml lives under .github/, so the CLI has to be pointed at it.
+      # Without this it silently falls back to defaults and registers the scan
+      # under a different project.
+      additional_scan_params: |
+        fossa.config=.github/.fossa.yml
+      # Pinned: the shared workflow still defaults to node 20, which is end-of-life.
+      node_version: "24"
+      setup_actions: '["setup-node"]'
+    secrets:
+      FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
+
+  # The reusable workflow owns the default-branch check, so a pull request run
+  # scans without writing and a run on trunk writes.
+  update_manifest:
+    needs: sca_scan
+    if: needs.sca_scan.result == 'success'
+    uses: SolaceDev/solace-public-workflows/.github/workflows/update-manifest.yaml@c689e87fd881013c2e5009bf6e751b49cae7527b # main
+    with:
+      table_name: solace-cloud-manifest
+      item: |
+        {
+          "squad": "cto",
+          "repository": "${{ github.event.repository.name }}",
+          "dev": {
+            "sha": "${{ github.sha }}",
+            "version": "${{ github.ref_name }}"
+          }
+        }
+    secrets:
+      MANIFEST_AWS_ROLE: ${{ secrets.MANIFEST_AWS_ROLE }}
