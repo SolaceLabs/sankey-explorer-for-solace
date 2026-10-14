@@ -8,9 +8,8 @@ subscribers on a Solace broker - live, as a Sankey diagram.
 ## Quick start
 
 ```bash
-docker pull ghcr.io/pascalre/sankey-explorer-for-solace:latest
-docker run -p 4000:4000 --add-host=host.docker.internal:host-gateway \
-  ghcr.io/pascalre/sankey-explorer-for-solace:latest
+docker pull ghcr.io/solacelabs/sankey-explorer-for-solace
+docker run -p 4000:4000 ghcr.io/solacelabs/sankey-explorer-for-solace:latest
 ```
 
 Open **http://localhost:4000**, then connect it to your broker on the
