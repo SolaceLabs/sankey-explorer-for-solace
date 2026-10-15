@@ -45,8 +45,10 @@ export async function createServer({
   const app = express();
 
   // Usually runs behind a reverse proxy/Cloud Run - needed so secure
-  // cookies and rate limiting see the real client IP/protocol.
-  app.set("trust proxy", 1);
+  // cookies and rate limiting see the real client IP/protocol. Hop count is
+  // configurable (TRUST_PROXY): with a bare `docker run` and no proxy, set 0,
+  // otherwise clients could spoof X-Forwarded-For to dodge the rate limits.
+  app.set("trust proxy", config.trustProxyHops);
 
   app.use(
     helmet({

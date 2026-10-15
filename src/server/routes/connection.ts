@@ -9,6 +9,7 @@ import {
   removeBrokerConnection,
 } from "../semp/connectionStore.js";
 import { config } from "../config.js";
+import { checkBrokerUrl } from "../semp/brokerUrlPolicy.js";
 import { logError, logInfo } from "../logger.js";
 
 export const connectionRouter = Router();
@@ -67,6 +68,11 @@ connectionRouter.post("/connection", connectRateLimit, async (req, res) => {
   }
   if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
     res.status(400).json({ error: "baseUrl must use http or https" });
+    return;
+  }
+  const blockedReason = checkBrokerUrl(parsedUrl, config.allowedBrokerHosts);
+  if (blockedReason) {
+    res.status(400).json({ error: blockedReason });
     return;
   }
 

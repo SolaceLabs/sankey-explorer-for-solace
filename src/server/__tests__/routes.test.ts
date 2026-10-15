@@ -131,6 +131,21 @@ describe("connection + endpoints (full flow on one session)", () => {
     expect(res.body.error).toMatch(/http or https/);
   });
 
+  it("rejects a cloud-metadata baseUrl without ever calling it (SSRF)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const agent = request.agent(app);
+    const res = await agent.post("/api/connection").send({
+      baseUrl: "http://169.254.169.254/latest/meta-data",
+      vpn: "default",
+      username: "ro",
+      password: "x",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/link-local|metadata/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("400s when the broker ping fails (unreachable/bad credentials)", async () => {
     vi.stubGlobal(
       "fetch",

@@ -58,6 +58,27 @@ describe("buildConfig", () => {
   });
 });
 
+describe("buildConfig - SSRF allowlist and proxy hops", () => {
+  it("defaults to no allowlist and one proxy hop", () => {
+    const cfg = buildConfig(envWith({}));
+    expect(cfg.allowedBrokerHosts).toEqual([]);
+    expect(cfg.trustProxyHops).toBe(1);
+  });
+
+  it("parses ALLOWED_BROKER_HOSTS as a trimmed comma list, dropping blanks", () => {
+    const cfg = buildConfig(envWith({ ALLOWED_BROKER_HOSTS: " a:8080, b.example.com ,," }));
+    expect(cfg.allowedBrokerHosts).toEqual(["a:8080", "b.example.com"]);
+  });
+
+  it("accepts TRUST_PROXY=0 (no proxy in front)", () => {
+    expect(buildConfig(envWith({ TRUST_PROXY: "0" })).trustProxyHops).toBe(0);
+  });
+
+  it.each(["-1", "abc", "1.5"])("rejects invalid TRUST_PROXY=%s", (v) => {
+    expect(() => buildConfig(envWith({ TRUST_PROXY: v }))).toThrow(/TRUST_PROXY/);
+  });
+});
+
 describe("assertValidConfig", () => {
   it("does not throw when login is fully configured", () => {
     const cfg = buildConfig(
