@@ -22,6 +22,9 @@ All notable changes to this project are documented here
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
 
 ### Fixed
+- `POST /api/connection` and `/api/login` returned 500 instead of 400 when sent without a JSON
+  body; the connect body is now validated by a typed, unit-tested `parseConnectBody` (with
+  length limits) instead of an unchecked cast.
 - Broker credentials no longer outlive the session: connections have an absolute 8 h TTL
   (swept every 10 min) matching the cookie, instead of staying in memory until restart.
 - Login issues a new session id (session fixation); broker connections move with it.

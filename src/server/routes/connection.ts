@@ -9,6 +9,7 @@ import {
   removeBrokerConnection,
 } from "../semp/connectionStore.js";
 import { config } from "../config.js";
+import { parseConnectBody } from "./connectBody.js";
 import { checkBrokerUrl } from "../semp/brokerUrlPolicy.js";
 import { logError, logInfo } from "../logger.js";
 
@@ -22,18 +23,6 @@ const connectRateLimit = rateLimit({
   legacyHeaders: false,
 });
 
-interface ConnectBody {
-  baseUrl?: unknown;
-  vpn?: unknown;
-  username?: unknown;
-  password?: unknown;
-  label?: unknown;
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
 /** List of all broker connections in this session (a session can hold several). */
 connectionRouter.get("/connection", (req, res) => {
   res.json(getBrokerConnectionsStatus(req.sessionID));
@@ -41,23 +30,12 @@ connectionRouter.get("/connection", (req, res) => {
 
 /** Adds a new broker connection - does NOT replace existing ones. */
 connectionRouter.post("/connection", connectRateLimit, async (req, res) => {
-  const { baseUrl, vpn, username, password, label } = req.body as ConnectBody;
-
-  if (
-    !isNonEmptyString(baseUrl) ||
-    !isNonEmptyString(vpn) ||
-    !isNonEmptyString(username) ||
-    !isNonEmptyString(password)
-  ) {
-    res
-      .status(400)
-      .json({ error: "baseUrl, vpn, username and password are required" });
+  const parsed = parseConnectBody(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
     return;
   }
-  if (label !== undefined && typeof label !== "string") {
-    res.status(400).json({ error: "label must be a string" });
-    return;
-  }
+  const { baseUrl, vpn, username, password, label } = parsed.value;
 
   let parsedUrl: URL;
   try {

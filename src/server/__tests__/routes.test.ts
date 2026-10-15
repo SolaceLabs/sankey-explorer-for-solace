@@ -344,3 +344,10 @@ describe("connection + endpoints (full flow on one session)", () => {
     expect(listRes.body).toEqual([]);
   });
 });
+
+describe("POST /api/connection - malformed bodies", () => {
+  it("400s (not 500s) when no JSON body is sent at all", async () => {
+    const res = await request(app).post("/api/connection");
+    expect(res.status).toBe(400);
+  });
+});

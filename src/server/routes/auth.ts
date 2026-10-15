@@ -32,7 +32,8 @@ authRouter.post("/login", loginRateLimit, async (req, res) => {
     return;
   }
 
-  const { username, password } = req.body as { username?: unknown; password?: unknown };
+  // req.body is undefined when no JSON was sent (Express 5) - don't destructure it blindly.
+  const { username, password } = (req.body ?? {}) as { username?: unknown; password?: unknown };
   if (typeof username !== "string" || typeof password !== "string") {
     res.status(400).json({ error: "username and password are required" });
     return;

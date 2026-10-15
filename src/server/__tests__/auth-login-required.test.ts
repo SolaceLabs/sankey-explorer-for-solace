@@ -51,6 +51,12 @@ describe("login-required mode", () => {
     expect(res.status).toBe(401);
   });
 
+  it("400s (not 500s) when login is posted without any JSON body", async () => {
+    const app = await createLoginRequiredApp();
+    const res = await request(app).post("/api/login");
+    expect(res.status).toBe(400);
+  });
+
   it("rejects login with a missing username or password", async () => {
     const app = await createLoginRequiredApp();
     const res = await request(app).post("/api/login").send({ username: "admin" });
