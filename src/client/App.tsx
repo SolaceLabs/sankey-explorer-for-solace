@@ -30,6 +30,19 @@ function App() {
   // the diagram view and back. See ConnectScreenProps for details.
   const [brokerConfigs, setBrokerConfigs] = useState<Map<string, BrokerConfigEntry>>(new Map());
 
+  const loadEndpoints = useCallback(async () => {
+    setView({ kind: "loading" });
+    try {
+      const { endpoints, errors } = await api.getEndpoints();
+      setView({ kind: "ready", endpoints, errors });
+    } catch (err) {
+      setView({
+        kind: "error",
+        message: err instanceof ApiRequestError ? err.message : "Failed to load endpoints",
+      });
+    }
+  }, []);
+
   const loadSession = useCallback(async () => {
     try {
       const s = await api.getSession();
@@ -47,23 +60,12 @@ function App() {
         message: err instanceof ApiRequestError ? err.message : "Could not reach the server",
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadEndpoints = useCallback(async () => {
-    setView({ kind: "loading" });
-    try {
-      const { endpoints, errors } = await api.getEndpoints();
-      setView({ kind: "ready", endpoints, errors });
-    } catch (err) {
-      setView({
-        kind: "error",
-        message: err instanceof ApiRequestError ? err.message : "Failed to load endpoints",
-      });
-    }
-  }, []);
+  }, [loadEndpoints]);
 
   useEffect(() => {
+    // Fetch-on-mount: loadSession only calls setState after awaiting the API, so this is
+    // synchronizing with an external system (the server), not a render-time cascade.
+    // oxlint-disable-next-line react/set-state-in-effect
     loadSession();
   }, [loadSession]);
 

@@ -57,7 +57,16 @@ export function SankeyChart({
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(800);
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  // The selection remembers which data/mode it was made in; it only counts
+  // while that context is unchanged. Derived during render (instead of an
+  // effect that resets it) so there is no extra render with a stale
+  // selection, and no setState-in-effect.
+  const [selection, setSelection] = useState<{
+    nodeId: string;
+    edges: SankeyEdge[];
+    viewMode: DiagramViewMode;
+    showDirectSubscribers: boolean;
+  } | null>(null);
   // A hovered LINK resolves to its target node id here, not a separate
   // edge-shaped state - see filterToRelevantSubgraph's doc comment for why
   // that guarantees hovering/clicking a connector and the block/text it
@@ -79,14 +88,20 @@ export function SankeyChart({
   }, []);
 
   // New data (reconnect/refresh), switching view mode, or toggling direct
-  // subscribers - a selection on a node that may no longer exist in the
-  // new edge set doesn't make sense anymore (e.g. a node only reachable
-  // via an implied wildcard edge disappears when switching from
-  // "dataflow" to "subscriptions"; a direct-subscriber node disappears
-  // when that toggle is switched off).
-  useEffect(() => {
-    setSelectedNodeId(null);
-  }, [edges, viewMode, showDirectSubscribers]);
+  // subscribers invalidate a selection: its node may no longer exist (e.g. a
+  // node only reachable via an implied wildcard edge disappears when
+  // switching from "dataflow" to "subscriptions"; a direct-subscriber node
+  // disappears when that toggle is switched off).
+  const selectedNodeId =
+    selection &&
+    selection.edges === edges &&
+    selection.viewMode === viewMode &&
+    selection.showDirectSubscribers === showDirectSubscribers
+      ? selection.nodeId
+      : null;
+  function setSelectedNodeId(nodeId: string | null) {
+    setSelection(nodeId === null ? null : { nodeId, edges, viewMode, showDirectSubscribers });
+  }
 
   // Raw edges -> hierarchy edges (see buildDisplayEdges for the order of steps).
   const explodedEdges = useMemo(
