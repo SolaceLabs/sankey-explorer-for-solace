@@ -40,7 +40,7 @@ export function requireAuth(
 
 /**
  * Gate for every route that needs at least one active broker connection
- * (endpoints query, sankey export). 400, not 401 - login and broker
+ * (the endpoints query). 400, not 401 - login and broker
  * connection are independent states. A session can have several broker
  * connections at once (see connectionStore.ts), so this just checks the
  * list isn't empty.

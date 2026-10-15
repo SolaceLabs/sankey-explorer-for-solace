@@ -1,4 +1,3 @@
-import type { SempClientOptions } from "../../shared/types.js";
 
 /**
  * SEMP v2 (RESTful JSON) - https://docs.solace.com/SEMP/SEMP-Home.htm
@@ -9,6 +8,16 @@ import type { SempClientOptions } from "../../shared/types.js";
  * SEMP v2 collection replies carry their own absolute "next page" URL in
  * `meta.paging.nextPageUri`, so following it is just "fetch that URL next".
  */
+
+export interface SempClientOptions {
+  baseUrl: string;
+  username: string;
+  password: string;
+  /** Minimum gap between requests in ms (Solace recommends <=10 req/s). */
+  minRequestIntervalMs: number;
+  /** Abort a single SEMP request after this many ms. Defaults to 15000. */
+  requestTimeoutMs?: number;
+}
 
 /** Per-request ceiling; SEMP monitor calls are small, a healthy broker answers in well under this. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;

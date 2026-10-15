@@ -1,5 +1,5 @@
 import { SempError, SempV2Client } from "./client.js";
-import { parseHost } from "./connectionStore.js";
+import { parseHost } from "./parseHost.js";
 import { logError } from "../logger.js";
 import type {
   BrokerQueryError,

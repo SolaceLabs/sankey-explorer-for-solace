@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SempV2Client } from "./client.js";
+import type { BrokerConnectionStatus } from "../../shared/types.js";
 import { config, SESSION_MAX_AGE_MS } from "../config.js";
 
 export interface BrokerConnectionInput {
@@ -9,14 +10,6 @@ export interface BrokerConnectionInput {
   password: string;
   /** User-friendly name for this broker (e.g. "EU-Broker"). Defaults to the VPN name if omitted. */
   label?: string;
-}
-
-export interface BrokerConnectionStatus {
-  id: string;
-  label: string;
-  vpn: string;
-  baseUrl: string;
-  connectedAt: number;
 }
 
 interface StoredConnection extends BrokerConnectionStatus {
@@ -138,20 +131,4 @@ export function listBrokerConnections(sessionId: string): StoredConnection[] {
 /** For the "connected?" indicator in the UI - NEVER returns credentials. */
 export function getBrokerConnectionsStatus(sessionId: string): BrokerConnectionStatus[] {
   return listBrokerConnections(sessionId).map(toStatus);
-}
-
-/**
- * Extracts a display-friendly host (with port, if non-default) from a
- * connection's baseUrl, e.g. "http://localhost:8080" -> "localhost:8080".
- * Used for the "vpn at host" sub-label shown per endpoint when multiple
- * message VPNs are connected. Falls back to the raw baseUrl on parse
- * failure - shouldn't happen since it was already validated as a URL at
- * connect time, but this is display code, not worth throwing over.
- */
-export function parseHost(baseUrl: string): string {
-  try {
-    return new URL(baseUrl).host;
-  } catch {
-    return baseUrl;
-  }
 }

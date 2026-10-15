@@ -32,16 +32,6 @@ export interface EndpointInfo {
   brokerHost: string;
 }
 
-export interface SempClientOptions {
-  baseUrl: string;
-  username: string;
-  password: string;
-  /** Minimum gap between requests in ms (Solace recommends <=10 req/s). */
-  minRequestIntervalMs: number;
-  /** Abort a single SEMP request after this many ms. Defaults to 15000. */
-  requestTimeoutMs?: number;
-}
-
 /**
  * What a single broker query can produce on its own - it doesn't know
  * which broker connection it came from (that's a multi-connection concept
@@ -65,4 +55,13 @@ export interface BrokerQueryError {
 export interface EndpointsResponse {
   endpoints: EndpointInfo[];
   errors: BrokerQueryError[];
+}
+
+/** What the API exposes about a broker connection - never credentials. */
+export interface BrokerConnectionStatus {
+  id: string;
+  label: string;
+  vpn: string;
+  baseUrl: string;
+  connectedAt: number;
 }
