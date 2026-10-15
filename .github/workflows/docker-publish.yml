@@ -1,5 +1,8 @@
 name: Build and publish Docker image
 
+# Publishes only after the CI workflow (lint, typecheck, tests, audit) has
+# passed for the same commit - see ci.yml. Tag pushes are gated by `needs`
+# via the in-workflow verify job below.
 on:
   push:
     branches: [master]
@@ -10,7 +13,24 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm audit --audit-level=low
+
   build-and-push:
+    needs: verify
     runs-on: ubuntu-latest
     permissions:
       contents: read
