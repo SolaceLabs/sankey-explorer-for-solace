@@ -14,7 +14,7 @@ export interface EndpointInfo {
   subscriptions: string[];
   /**
    * The client-username SEMP reports as the endpoint's owner, if any.
-   * Undefined if the broker reply has no <owner> element (unverified for
+   * Undefined if the broker reply has no owner attribute (unverified for
    * topic-endpoints specifically - queues reliably have this, but whether
    * topic-endpoints do too needs checking against a real broker). Not
    * applicable to direct subscribers - always undefined for those.

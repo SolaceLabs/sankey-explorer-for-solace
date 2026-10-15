@@ -17,6 +17,8 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- Server logs are now one JSON object per line (`timestamp`, `level`, `message`, `error`),
+  which also prevents log forging via newlines in user-supplied values (CWE-117).
 - `GET /api/endpoints` now returns `{ endpoints, errors }`. One unreachable broker no longer
   blanks a multi-broker diagram: the reachable ones are drawn and the UI warns about the rest.
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
