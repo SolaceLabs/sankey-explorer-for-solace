@@ -78,6 +78,29 @@ describe("login-required mode", () => {
     expect(endpointsRes.body.error).toBe("Not connected to a broker");
   });
 
+  it("rotates the session id on every login, invalidating the previous one (session fixation)", async () => {
+    const app = await createLoginRequiredApp();
+    const credentials = { username: "admin", password: TEST_PASSWORD };
+
+    const first = await request(app).post("/api/login").send(credentials);
+    const oldCookie = first.headers["set-cookie"]?.[0]?.split(";")[0];
+    expect(oldCookie).toMatch(/^sankey\.sid=/);
+
+    // The cookie from the first login is a valid authenticated session...
+    const before = await request(app).get("/api/session").set("Cookie", oldCookie!);
+    expect(before.body.authenticated).toBe(true);
+
+    // ...logging in again while presenting it must hand out a different id...
+    const second = await request(app).post("/api/login").set("Cookie", oldCookie!).send(credentials);
+    const newCookie = second.headers["set-cookie"]?.[0]?.split(";")[0];
+    expect(newCookie).toMatch(/^sankey\.sid=/);
+    expect(newCookie).not.toBe(oldCookie);
+
+    // ...and the superseded id is dead.
+    const stale = await request(app).get("/api/session").set("Cookie", oldCookie!);
+    expect(stale.body.authenticated).toBe(false);
+  });
+
   it("logging out clears the session, protected routes require login again", async () => {
     const app = await createLoginRequiredApp();
     const agent = request.agent(app);

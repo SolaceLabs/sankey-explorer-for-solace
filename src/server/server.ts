@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import type { Server as HttpServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { config } from "./config.js";
+import { config, SESSION_MAX_AGE_MS } from "./config.js";
 import { authRouter } from "./routes/auth.js";
 import { connectionRouter } from "./routes/connection.js";
 import { endpointsRouter } from "./routes/endpoints.js";
@@ -77,12 +77,13 @@ export async function createServer({
       name: "sankey.sid",
       secret: config.app.sessionSecret,
       resave: false,
-      // true: creates a session for every visitor (needed so the broker
-      // connection can be reliably associated even before any login).
-      // Switch to a MemoryStore TTL/Redis if needed (memory growth in
-      // workshop mode without login) - see the deferred-work note in
-      // connectionStore.ts.
-      saveUninitialized: true,
+      // false: no session (and no memory) is created for visitors who never
+      // connect a broker or log in - otherwise every unauthenticated request
+      // (scanners, health probes) would add a MemoryStore entry that is never
+      // evicted. Routes that need a session modify it (login sets
+      // `authenticated`, connect sets `brokerConnected`), which makes
+      // express-session persist it and send the cookie in that response.
+      saveUninitialized: false,
       cookie: {
         httpOnly: true,
         // "auto": Secure is set based on the ACTUAL request (req.secure,
@@ -98,7 +99,7 @@ export async function createServer({
         // terminates TLS in front of this.
         secure: "auto",
         sameSite: "lax",
-        maxAge: 8 * 60 * 60 * 1000, // 8h - one workshop/work session
+        maxAge: SESSION_MAX_AGE_MS,
       },
     }),
   );

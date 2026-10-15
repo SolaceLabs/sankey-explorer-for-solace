@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SempV2Client } from "./client.js";
-import { config } from "../config.js";
+import { config, SESSION_MAX_AGE_MS } from "../config.js";
 
 export interface BrokerConnectionInput {
   baseUrl: string; // e.g. http://broker-host:8080 - the broker's SEMP management root
@@ -35,6 +35,15 @@ interface StoredConnection extends BrokerConnectionStatus {
  */
 const connections = new Map<string, Map<string, StoredConnection>>();
 
+/**
+ * When each session's FIRST connection was added. Credentials must not outlive
+ * the session cookie (SESSION_MAX_AGE_MS): express-session's MemoryStore drops
+ * expired sessions silently, with no callback, so without this the passwords
+ * in `connections` would stay in memory for the life of the process.
+ * sweepExpiredConnections() uses it as an absolute TTL.
+ */
+const sessionStartedAt = new Map<string, number>();
+
 function toStatus(conn: StoredConnection): BrokerConnectionStatus {
   return { id: conn.id, label: conn.label, vpn: conn.vpn, baseUrl: conn.baseUrl, connectedAt: conn.connectedAt };
 }
@@ -61,16 +70,65 @@ export function addBrokerConnection(
   const sessionConnections = connections.get(sessionId) ?? new Map();
   sessionConnections.set(id, conn);
   connections.set(sessionId, sessionConnections);
+  if (!sessionStartedAt.has(sessionId)) sessionStartedAt.set(sessionId, conn.connectedAt);
 
   return toStatus(conn);
 }
 
 export function removeBrokerConnection(sessionId: string, connectionId: string): boolean {
-  return connections.get(sessionId)?.delete(connectionId) ?? false;
+  const sessionConnections = connections.get(sessionId);
+  const removed = sessionConnections?.delete(connectionId) ?? false;
+  if (sessionConnections?.size === 0) clearBrokerConnections(sessionId);
+  return removed;
 }
 
 export function clearBrokerConnections(sessionId: string): void {
   connections.delete(sessionId);
+  sessionStartedAt.delete(sessionId);
+}
+
+/**
+ * Re-keys a session's connections after express-session's regenerate() gave it
+ * a new id (login does this to prevent session fixation). The start time moves
+ * with them, so the TTL keeps counting from the original connect.
+ */
+export function moveBrokerConnections(fromSessionId: string, toSessionId: string): void {
+  if (fromSessionId === toSessionId) return;
+  const moved = connections.get(fromSessionId);
+  if (moved) {
+    connections.set(toSessionId, moved);
+    connections.delete(fromSessionId);
+  }
+  const startedAt = sessionStartedAt.get(fromSessionId);
+  if (startedAt !== undefined) {
+    sessionStartedAt.set(toSessionId, startedAt);
+    sessionStartedAt.delete(fromSessionId);
+  }
+}
+
+/**
+ * Drops (and returns the count of) sessions whose connections are older than
+ * `maxAgeMs`, releasing their credentials. `now` is injectable for tests.
+ */
+export function sweepExpiredConnections(
+  maxAgeMs: number = SESSION_MAX_AGE_MS,
+  now: number = Date.now(),
+): number {
+  let removed = 0;
+  for (const [sessionId, startedAt] of sessionStartedAt) {
+    if (now - startedAt > maxAgeMs) {
+      clearBrokerConnections(sessionId);
+      removed++;
+    }
+  }
+  return removed;
+}
+
+/** Runs the sweep periodically; unref'd so it never keeps the process (or a test run) alive. */
+export function startConnectionSweeper(intervalMs: number = 10 * 60 * 1000): NodeJS.Timeout {
+  const timer = setInterval(() => sweepExpiredConnections(), intervalMs);
+  timer.unref();
+  return timer;
 }
 
 export function listBrokerConnections(sessionId: string): StoredConnection[] {

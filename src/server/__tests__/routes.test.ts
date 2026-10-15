@@ -85,16 +85,31 @@ describe("session cookie security (cookie.secure: 'auto')", () => {
   // broker" right after a successful connect. `secure: "auto"` fixes this
   // by deciding Secure from the ACTUAL request (req.secure, which honors
   // "trust proxy" + X-Forwarded-Proto) instead of NODE_ENV.
+  // A session (and its cookie) only exists once something modifies it - here
+  // a successful broker connect (see saveUninitialized in server.ts).
+  const connectBody = { baseUrl: "http://localhost:8080", vpn: "default", username: "ro", password: "x" };
+
   it("does not mark the session cookie Secure for a plain HTTP request", async () => {
-    const res = await request(app).get("/api/session");
+    const res = await request(app).post("/api/connection").send(connectBody);
     const setCookie = res.headers["set-cookie"]?.[0] ?? "";
+    expect(setCookie).toMatch(/sankey\.sid/);
     expect(setCookie).not.toMatch(/secure/i);
   });
 
   it("marks the session cookie Secure when a TLS-terminating reverse proxy reports https", async () => {
-    const res = await request(app).get("/api/session").set("X-Forwarded-Proto", "https");
+    const res = await request(app)
+      .post("/api/connection")
+      .set("X-Forwarded-Proto", "https")
+      .send(connectBody);
     const setCookie = res.headers["set-cookie"]?.[0] ?? "";
     expect(setCookie).toMatch(/secure/i);
+  });
+});
+
+describe("session creation (memory-growth guard)", () => {
+  it("does not create a session or cookie for a visitor who only reads /api/session", async () => {
+    const res = await request(app).get("/api/session");
+    expect(res.headers["set-cookie"]).toBeUndefined();
   });
 });
 

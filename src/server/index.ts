@@ -1,6 +1,7 @@
 import { createServer as createHttpServer } from "node:http";
 import { assertValidConfig, config } from "./config.js";
 import { createServer } from "./server.js";
+import { startConnectionSweeper } from "./semp/connectionStore.js";
 import { logInfo } from "./logger.js";
 
 assertValidConfig(config);
@@ -11,6 +12,7 @@ assertValidConfig(config);
 const httpServer = createHttpServer();
 const app = await createServer({ httpServer });
 httpServer.on("request", app);
+startConnectionSweeper();
 
 httpServer.listen(config.port, () => {
   const mode = config.loginRequired ? "login required" : "workshop mode (no login)";

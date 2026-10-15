@@ -49,6 +49,9 @@ function parseHostList(raw: string | undefined): string[] {
     .filter((h) => h.length > 0);
 }
 
+/** Session cookie lifetime - one workshop/work session. Also the hard TTL for in-memory broker connections. */
+export const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
+
 /**
  * Pure function taking env as a parameter (rather than reading
  * `process.env` internally) so it's trivially testable with any env

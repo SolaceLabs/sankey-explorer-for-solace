@@ -104,6 +104,7 @@ connectionRouter.post("/connection", connectRateLimit, async (req, res) => {
   }
 
   addBrokerConnection(req.sessionID, { baseUrl, vpn, username, password, label });
+  req.session.brokerConnected = true; // persists the session + issues the cookie
   logInfo(`Connected to ${connectionDesc}`);
   res.json(getBrokerConnectionsStatus(req.sessionID));
 });

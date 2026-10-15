@@ -4,7 +4,9 @@ import {
   clearBrokerConnections,
   getBrokerConnectionsStatus,
   listBrokerConnections,
+  moveBrokerConnections,
   parseHost,
+  sweepExpiredConnections,
   removeBrokerConnection,
 } from "../semp/connectionStore.js";
 
@@ -125,5 +127,63 @@ describe("parseHost", () => {
 
   it("falls back to the raw string for an unparseable URL", () => {
     expect(parseHost("not a url")).toBe("not a url");
+  });
+});
+
+describe("sweepExpiredConnections", () => {
+  it("drops connections (and their credentials) older than the max age", () => {
+    const sessionId = freshSessionId();
+    addBrokerConnection(sessionId, validInput);
+
+    const removed = sweepExpiredConnections(1000, Date.now() + 2000);
+
+    expect(removed).toBeGreaterThanOrEqual(1);
+    expect(listBrokerConnections(sessionId)).toEqual([]);
+  });
+
+  it("keeps connections younger than the max age", () => {
+    const sessionId = freshSessionId();
+    addBrokerConnection(sessionId, validInput);
+
+    sweepExpiredConnections(60_000, Date.now() + 1000);
+
+    expect(listBrokerConnections(sessionId)).toHaveLength(1);
+    clearBrokerConnections(sessionId);
+  });
+
+  it("forgets the start time once the last connection is removed, so a later connect starts a fresh TTL", () => {
+    const sessionId = freshSessionId();
+    const a = addBrokerConnection(sessionId, validInput);
+    removeBrokerConnection(sessionId, a.id);
+    addBrokerConnection(sessionId, validInput);
+
+    // Would wipe the new connection if the old start time had been kept.
+    sweepExpiredConnections(1000, Date.now() + 500);
+
+    expect(listBrokerConnections(sessionId)).toHaveLength(1);
+    clearBrokerConnections(sessionId);
+  });
+});
+
+describe("moveBrokerConnections", () => {
+  it("re-keys connections to the new session id", () => {
+    const from = freshSessionId();
+    const to = freshSessionId();
+    addBrokerConnection(from, validInput);
+
+    moveBrokerConnections(from, to);
+
+    expect(listBrokerConnections(from)).toEqual([]);
+    expect(listBrokerConnections(to)).toHaveLength(1);
+    clearBrokerConnections(to);
+  });
+
+  it("is a no-op when the ids are equal or the source has nothing", () => {
+    const id = freshSessionId();
+    addBrokerConnection(id, validInput);
+    moveBrokerConnections(id, id);
+    moveBrokerConnections(freshSessionId(), freshSessionId());
+    expect(listBrokerConnections(id)).toHaveLength(1);
+    clearBrokerConnections(id);
   });
 });

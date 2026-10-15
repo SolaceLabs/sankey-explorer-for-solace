@@ -5,6 +5,8 @@ import { listBrokerConnections } from "../semp/connectionStore.js";
 declare module "express-session" {
   interface SessionData {
     authenticated?: boolean;
+    /** Set when a broker is connected, purely so the session gets persisted (see saveUninitialized in server.ts). */
+    brokerConnected?: boolean;
   }
 }
 
