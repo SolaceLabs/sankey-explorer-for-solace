@@ -10,6 +10,9 @@ import type { SempClientOptions } from "../../shared/types.js";
  * `meta.paging.nextPageUri`, so following it is just "fetch that URL next".
  */
 
+/** Per-request ceiling; SEMP monitor calls are small, a healthy broker answers in well under this. */
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+
 export class SempError extends Error {
   constructor(message: string, readonly cause?: unknown) {
     super(message);
@@ -29,7 +32,13 @@ export interface SempV2Page<T> {
 }
 
 export class SempV2Client {
-  private lastRequestAt = 0;
+  /**
+   * Earliest time (ms since epoch) at which the NEXT request may be sent.
+   * Slots are reserved synchronously in throttle() - before any await - so
+   * concurrent callers (queries.ts fans out with Promise.all) each get their
+   * own, strictly later slot instead of all computing the same wait.
+   */
+  private nextSlotAt = 0;
 
   constructor(private readonly options: SempClientOptions) {}
 
@@ -59,10 +68,18 @@ export class SempV2Client {
   private async getJson<T>(url: string): Promise<T> {
     await this.throttle();
 
+    const timeoutMs = this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     let response: Response;
     try {
-      response = await fetch(url, { headers: { Authorization: this.authHeader() } });
+      response = await fetch(url, {
+        headers: { Authorization: this.authHeader() },
+        // A hung or black-holed broker must fail the request, not hang it.
+        signal: AbortSignal.timeout(timeoutMs),
+      });
     } catch (err) {
+      if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+        throw new SempError(`SEMP request timed out after ${timeoutMs}ms: ${url}`, err);
+      }
       throw new SempError(`SEMP request failed (network): ${url}`, err);
     }
 
@@ -98,6 +115,7 @@ export class SempV2Client {
     const page = await this.getJson<SempV2Page<T>>(url);
     const nextUrl = page.meta?.paging?.nextPageUri;
     if (!nextUrl) return page.data;
+    this.assertSameOrigin(nextUrl);
     return [...page.data, ...(await this.getCollection<T>(nextUrl))];
   }
 
@@ -114,13 +132,35 @@ export class SempV2Client {
     return this.getCollection<T>(url);
   }
 
+  /**
+   * The broker's reply is untrusted input: a (compromised or malicious)
+   * broker could point `nextPageUri` at any host and receive our Basic Auth
+   * header there (credential leak) or make us probe internal addresses
+   * (SSRF). Only follow pagination links that stay on the origin the user
+   * connected to.
+   */
+  private assertSameOrigin(candidateUrl: string): void {
+    let candidateOrigin: string;
+    try {
+      candidateOrigin = new URL(candidateUrl).origin;
+    } catch {
+      throw new SempError(`Refusing malformed pagination URL from broker: ${candidateUrl}`);
+    }
+    if (candidateOrigin !== new URL(this.options.baseUrl).origin) {
+      throw new SempError(
+        `Refusing to follow pagination link to a different origin (${candidateOrigin})`,
+      );
+    }
+  }
+
   private async throttle(): Promise<void> {
-    const elapsed = Date.now() - this.lastRequestAt;
-    const wait = this.options.minRequestIntervalMs - elapsed;
+    const now = Date.now();
+    const slot = Math.max(now, this.nextSlotAt);
+    this.nextSlotAt = slot + this.options.minRequestIntervalMs;
+    const wait = slot - now;
     if (wait > 0) {
       await new Promise((resolve) => setTimeout(resolve, wait));
     }
-    this.lastRequestAt = Date.now();
   }
 
   /**

@@ -128,3 +128,85 @@ describe("SempV2Client.getVpnCollection", () => {
     await expect(client.getVpnCollection("default", "/queues")).rejects.toBeInstanceOf(SempError);
   });
 });
+
+describe("SempV2Client throttling", () => {
+  it("spaces out CONCURRENT requests by at least the minimum interval", async () => {
+    const intervalMs = 60;
+    const throttled = new SempV2Client({
+      baseUrl: "http://localhost:8080",
+      username: "ro",
+      password: "x",
+      minRequestIntervalMs: intervalMs,
+    });
+    const callTimes: number[] = [];
+    vi.mocked(fetch).mockImplementation(() => {
+      callTimes.push(Date.now());
+      return Promise.resolve(jsonResponse({ data: [] }));
+    });
+
+    // Promise.all mirrors how queries.ts fans out one request per queue.
+    await Promise.all([
+      throttled.getVpnCollection("default", "/queues"),
+      throttled.getVpnCollection("default", "/queues"),
+      throttled.getVpnCollection("default", "/queues"),
+    ]);
+
+    expect(callTimes).toHaveLength(3);
+    // 5ms tolerance for timer jitter.
+    expect(callTimes[1]! - callTimes[0]!).toBeGreaterThanOrEqual(intervalMs - 5);
+    expect(callTimes[2]! - callTimes[1]!).toBeGreaterThanOrEqual(intervalMs - 5);
+  });
+});
+
+describe("SempV2Client request timeout", () => {
+  it("passes an abort signal to fetch", async () => {
+    const fetchMock = vi.mocked(fetch).mockResolvedValue(jsonResponse({ data: [] }));
+
+    await client.getVpnCollection("default", "/queues");
+
+    expect(fetchMock.mock.calls[0]![1]?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("fails with a SempError instead of hanging when the broker never answers", async () => {
+    const fast = new SempV2Client({
+      baseUrl: "http://localhost:8080",
+      username: "ro",
+      password: "x",
+      minRequestIntervalMs: 0,
+      requestTimeoutMs: 20,
+    });
+    // A black-holed broker: only ever settles when the abort signal fires.
+    vi.mocked(fetch).mockImplementation(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(init.signal!.reason));
+        }),
+    );
+
+    await expect(fast.ping()).rejects.toThrow(/timed out/);
+  });
+});
+
+describe("SempV2Client pagination origin check", () => {
+  it("refuses a nextPageUri pointing at another host and never sends credentials there", async () => {
+    const fetchMock = vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        data: [{ queueName: "q1" }],
+        meta: { paging: { nextPageUri: "http://169.254.169.254/latest/meta-data" } },
+      }),
+    );
+
+    await expect(client.getVpnCollection("default", "/queues")).rejects.toThrow(
+      /different origin/,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a malformed nextPageUri", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({ data: [], meta: { paging: { nextPageUri: "not a url" } } }),
+    );
+
+    await expect(client.getVpnCollection("default", "/queues")).rejects.toThrow(/malformed/);
+  });
+});

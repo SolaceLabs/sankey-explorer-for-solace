@@ -38,6 +38,8 @@ export interface SempClientOptions {
   password: string;
   /** Minimum gap between requests in ms (Solace recommends <=10 req/s). */
   minRequestIntervalMs: number;
+  /** Abort a single SEMP request after this many ms. Defaults to 15000. */
+  requestTimeoutMs?: number;
 }
 
 /**
