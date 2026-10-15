@@ -127,7 +127,7 @@ describe("ConnectScreen - config file export", () => {
     await user.click(screen.getByRole("button", { name: "Export config" }));
 
     expect(createObjectURL).toHaveBeenCalledOnce();
-    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    const blob = createObjectURL.mock.calls[0]![0] as Blob;
     const text = await blob.text();
     expect(text).toContain("username: ro-user");
     expect(text).toContain("username: u2");

@@ -21,7 +21,8 @@ export function buildBrokerColorPalette(brokerLabelsInOrder: string[]): Map<stri
   const colors = new Map<string, string>();
   for (const label of brokerLabelsInOrder) {
     if (!colors.has(label)) {
-      colors.set(label, BROKER_COLOR_PALETTE[colors.size % BROKER_COLOR_PALETTE.length]);
+      // Palette is a non-empty constant and the index is modulo its length, so this is always defined.
+      colors.set(label, BROKER_COLOR_PALETTE[colors.size % BROKER_COLOR_PALETTE.length]!);
     }
   }
   return colors;
