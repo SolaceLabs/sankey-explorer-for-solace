@@ -9,7 +9,7 @@ import { buildBrokerColorPalette, buildEndpointBrokerColors } from "./lib/buildE
 import { buildEndpointBrokerLabels } from "./lib/buildEndpointBrokerLabels";
 import { buildEndpointVpnHost } from "./lib/buildEndpointVpnHost";
 import type { BrokerConfigEntry } from "./lib/brokerConfig";
-import type { BrokerConnectionStatus, EndpointInfo, SessionInfo } from "./types";
+import type { BrokerConnectionStatus, BrokerQueryError, EndpointInfo, SessionInfo } from "./types";
 import "./index.css";
 
 type ViewState =
@@ -17,7 +17,7 @@ type ViewState =
   | { kind: "error"; message: string }
   | { kind: "login" }
   | { kind: "connect" }
-  | { kind: "ready"; endpoints: EndpointInfo[] };
+  | { kind: "ready"; endpoints: EndpointInfo[]; errors: BrokerQueryError[] };
 
 function App() {
   const [session, setSession] = useState<SessionInfo | null>(null);
@@ -53,8 +53,8 @@ function App() {
   const loadEndpoints = useCallback(async () => {
     setView({ kind: "loading" });
     try {
-      const endpoints = await api.getEndpoints();
-      setView({ kind: "ready", endpoints });
+      const { endpoints, errors } = await api.getEndpoints();
+      setView({ kind: "ready", endpoints, errors });
     } catch (err) {
       setView({
         kind: "error",
@@ -77,8 +77,8 @@ function App() {
     setIsRefreshing(true);
     setRefreshError(null);
     try {
-      const endpoints = await api.getEndpoints();
-      setView({ kind: "ready", endpoints });
+      const { endpoints, errors } = await api.getEndpoints();
+      setView({ kind: "ready", endpoints, errors });
     } catch (err) {
       setRefreshError(
         err instanceof ApiRequestError ? err.message : "Refresh failed",
@@ -165,6 +165,12 @@ function App() {
         {view.kind === "ready" && (
           <div className="ready-view">
             {refreshError && <p className="error banner">{refreshError}</p>}
+            {view.errors.length > 0 && (
+              <p className="error banner" role="alert">
+                Some Message VPNs could not be loaded and are missing from the diagram:{" "}
+                {view.errors.map((e) => `${e.brokerLabel} (${e.message})`).join("; ")}
+              </p>
+            )}
             <SankeyChart
               edges={toSankeyEdges(view.endpoints)}
               endpointOwners={buildEndpointOwners(view.endpoints)}

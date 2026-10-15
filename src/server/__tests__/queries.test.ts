@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { SempError } from "../semp/client.js";
 import {
   fetchAllEndpoints,
   fetchDirectSubscribers,
@@ -177,8 +178,9 @@ describe("fetchEndpointsAcrossConnections", () => {
   it("stamps brokerLabel and brokerHost (parsed from baseUrl) onto every endpoint", async () => {
     const connection = fakeConnectionReturning("orders-q");
 
-    const endpoints = await fetchEndpointsAcrossConnections([connection]);
+    const { endpoints, errors } = await fetchEndpointsAcrossConnections([connection]);
 
+    expect(errors).toEqual([]);
     expect(endpoints).toEqual([
       {
         type: "queue",
@@ -198,10 +200,42 @@ describe("fetchEndpointsAcrossConnections", () => {
       fakeConnectionReturning("orders-q", { label: "B", baseUrl: "http://host-b:8080" }),
     ];
 
-    const endpoints = await fetchEndpointsAcrossConnections(connections);
+    const { endpoints } = await fetchEndpointsAcrossConnections(connections);
 
     expect(endpoints).toHaveLength(2);
     expect(endpoints.map((e) => e.brokerLabel)).toEqual(["A", "B"]);
     expect(endpoints.map((e) => e.brokerHost)).toEqual(["host-a:8080", "host-b:8080"]);
+  });
+
+  it("returns the brokers that succeeded and names the one that failed, instead of failing everything", async () => {
+    const failing: FetchableBrokerConnection = {
+      client: {
+        getVpnCollection: () => Promise.reject(new SempError("SEMP request failed: HTTP 503")),
+      } as unknown as SempV2Client,
+      vpn: "default",
+      label: "Dead-Broker",
+      baseUrl: "http://dead:8080",
+    };
+    const healthy = fakeConnectionReturning("orders-q", { label: "Healthy-Broker" });
+
+    const { endpoints, errors } = await fetchEndpointsAcrossConnections([failing, healthy]);
+
+    expect(endpoints.map((e) => e.brokerLabel)).toEqual(["Healthy-Broker"]);
+    expect(errors).toEqual([{ brokerLabel: "Dead-Broker", message: "SEMP request failed: HTTP 503" }]);
+  });
+
+  it("does not leak the text of unexpected (non-SEMP) errors", async () => {
+    const broken: FetchableBrokerConnection = {
+      client: {
+        getVpnCollection: () => Promise.reject(new TypeError("secret internal detail")),
+      } as unknown as SempV2Client,
+      vpn: "default",
+      label: "Broken",
+      baseUrl: "http://broken:8080",
+    };
+
+    const { errors } = await fetchEndpointsAcrossConnections([broken]);
+
+    expect(errors).toEqual([{ brokerLabel: "Broken", message: "Unexpected error" }]);
   });
 });

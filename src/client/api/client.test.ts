@@ -108,10 +108,10 @@ describe("api.disconnectAll", () => {
 
 describe("api.getEndpoints", () => {
   it("GETs /api/endpoints and returns the parsed body", async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse([{ name: "orders-q" }]));
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ endpoints: [{ name: "orders-q" }], errors: [] }));
 
-    const endpoints = await api.getEndpoints();
+    const result = await api.getEndpoints();
 
-    expect(endpoints).toEqual([{ name: "orders-q" }]);
+    expect(result).toEqual({ endpoints: [{ name: "orders-q" }], errors: [] });
   });
 });

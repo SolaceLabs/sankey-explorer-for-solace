@@ -49,3 +49,20 @@ export interface SempClientOptions {
  * afterward).
  */
 export type RawEndpointInfo = Omit<EndpointInfo, "brokerLabel" | "brokerHost">;
+
+/** One broker connection that could not be queried (the others may still have succeeded). */
+export interface BrokerQueryError {
+  brokerLabel: string;
+  message: string;
+}
+
+/**
+ * Reply of GET /api/endpoints. A partial result is a valid 200: `endpoints`
+ * holds what the reachable brokers returned, `errors` names the ones that
+ * failed, so one dead broker in a multi-broker session doesn't blank the
+ * whole diagram. Only when EVERY broker fails does the route answer 502.
+ */
+export interface EndpointsResponse {
+  endpoints: EndpointInfo[];
+  errors: BrokerQueryError[];
+}

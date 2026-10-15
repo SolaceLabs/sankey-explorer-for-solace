@@ -16,6 +16,11 @@ All notable changes to this project are documented here
 - `TRUST_PROXY` env var (proxy hop count, default 1) so a bare `docker run` can set 0 and
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
+### Changed
+- `GET /api/endpoints` now returns `{ endpoints, errors }`. One unreachable broker no longer
+  blanks a multi-broker diagram: the reachable ones are drawn and the UI warns about the rest.
+  Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
+
 ### Fixed
 - Broker credentials no longer outlive the session: connections have an absolute 8 h TTL
   (swept every 10 min) matching the cookie, instead of staying in memory until restart.

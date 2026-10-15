@@ -1,4 +1,4 @@
-import type { ApiError, BrokerConnectionStatus, EndpointInfo, SessionInfo } from "../types";
+import type { ApiError, BrokerConnectionStatus, EndpointsResponse, SessionInfo } from "../types";
 
 export class ApiRequestError extends Error {}
 
@@ -59,5 +59,5 @@ export const api = {
   disconnectAll: () =>
     request<BrokerConnectionStatus[]>("/connection", { method: "DELETE" }),
 
-  getEndpoints: () => request<EndpointInfo[]>("/endpoints"),
+  getEndpoints: () => request<EndpointsResponse>("/endpoints"),
 };

@@ -256,7 +256,8 @@ describe("connection + endpoints (full flow on one session)", () => {
 
     const endpointsRes = await agent.get("/api/endpoints");
     expect(endpointsRes.status).toBe(200);
-    expect(endpointsRes.body).toEqual([
+    expect(endpointsRes.body.errors).toEqual([]);
+    expect(endpointsRes.body.endpoints).toEqual([
       {
         type: "queue",
         name: "orders-q",
@@ -280,6 +281,32 @@ describe("connection + endpoints (full flow on one session)", () => {
 
     const afterRemoveRes = await agent.get("/api/endpoints");
     expect(afterRemoveRes.status).toBe(400);
+  });
+
+  it("200s with a partial result when only one of two brokers fails", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/connection").send({
+      baseUrl: "http://good-broker:8080", vpn: "default", username: "ro", password: "x", label: "Good",
+    });
+    await agent.post("/api/connection").send({
+      baseUrl: "http://bad-broker:8080", vpn: "default", username: "ro", password: "x", label: "Bad",
+    });
+
+    const healthy = mockBrokerFetch();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        url.includes("bad-broker") ? Promise.reject(new Error("down")) : healthy(url),
+      ),
+    );
+
+    const res = await agent.get("/api/endpoints");
+
+    expect(res.status).toBe(200);
+    expect(res.body.endpoints.length).toBeGreaterThan(0);
+    expect(res.body.endpoints.every((e: { brokerLabel: string }) => e.brokerLabel === "Good")).toBe(true);
+    expect(res.body.errors).toHaveLength(1);
+    expect(res.body.errors[0].brokerLabel).toBe("Bad");
   });
 
   it("502s when the SEMP query itself fails after a successful connect", async () => {
