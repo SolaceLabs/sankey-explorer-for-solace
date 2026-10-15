@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sankeyLinkHorizontal } from "d3-sankey";
-import { computeSankeyLayout, type SortMode } from "../lib/sankeyLayout";
-import { explodeTopicHierarchy } from "../lib/explodeTopicHierarchy";
-import { addWildcardCoverageEdges } from "../../shared/addWildcardCoverageEdges";
+import { computeSankeyLayout, resolvedLinkIds, type SortMode } from "../lib/sankeyLayout";
+import { buildDisplayEdges, type DiagramViewMode } from "../lib/buildDisplayEdges";
+import { downloadSvg } from "../lib/exportSvg";
 import { nodeDisplayLabel } from "../lib/nodeDisplayLabel";
 import { endpointDisplayName } from "../lib/endpointDisplayName";
 import { filterToRelevantSubgraph } from "../lib/filterToRelevantSubgraph";
@@ -45,16 +45,7 @@ function edgeKey(source: string, target: string): string {
 
 const linkPath = sankeyLinkHorizontal();
 
-/**
- * - "dataflow": the default. Includes implied wildcard-coverage edges (see
- *   addWildcardCoverageEdges) - a broader wildcard subscription shows up
- *   as also reaching a more specific topic subscribed elsewhere, since
- *   that's what the broker actually delivers.
- * - "subscriptions": literal mode. Only what's actually, individually
- *   declared on each endpoint - no wildcard-coverage edges at all, so the
- *   diagram matches the broker's raw subscription list 1:1.
- */
-export type DiagramViewMode = "dataflow" | "subscriptions";
+export type { DiagramViewMode };
 
 export function SankeyChart({
   edges,
@@ -97,41 +88,10 @@ export function SankeyChart({
     setSelectedNodeId(null);
   }, [edges, viewMode, showDirectSubscribers]);
 
-  // "Show direct subscribers" - drops every edge touching a direct-
-  // subscriber node (id prefixed "Direct Subscriber:" by toSankeyEdges)
-  // before anything else runs, so wildcard-coverage/hierarchy exploding
-  // below never sees them and no orphaned direct-subscriber node can
-  // sneak back in via an implied edge.
-  const edgesAfterDirectSubscriberFilter = useMemo(
-    () =>
-      showDirectSubscribers
-        ? edges
-        : edges.filter(
-            (e) =>
-              !e.source.startsWith("Direct Subscriber:") &&
-              !e.target.startsWith("Direct Subscriber:"),
-          ),
-    [edges, showDirectSubscribers],
-  );
-
-  // Wildcard subscriptions (e.g. "acme/sales/>") implicitly also receive
-  // everything a more specific subscription on a DIFFERENT endpoint (e.g.
-  // "acme/sales/orders") receives - even though those are separate
-  // subscription strings the broker never explicitly links. This has to
-  // run BEFORE exploding into the per-segment hierarchy, since it compares
-  // full subscription strings against each other. Only applied in
-  // "dataflow" mode - "subscriptions" mode shows the broker's raw,
-  // per-endpoint subscription list with no wildcard-coverage edges added.
-  const edgesWithWildcardCoverage = useMemo(
-    () =>
-      viewMode === "dataflow"
-        ? addWildcardCoverageEdges(edgesAfterDirectSubscriberFilter)
-        : edgesAfterDirectSubscriberFilter,
-    [edgesAfterDirectSubscriberFilter, viewMode],
-  );
+  // Raw edges -> hierarchy edges (see buildDisplayEdges for the order of steps).
   const explodedEdges = useMemo(
-    () => explodeTopicHierarchy(edgesWithWildcardCoverage),
-    [edgesWithWildcardCoverage],
+    () => buildDisplayEdges(edges, { viewMode, showDirectSubscribers }),
+    [edges, viewMode, showDirectSubscribers],
   );
 
   const displayEdges = useMemo(() => {
@@ -183,33 +143,7 @@ export function SankeyChart({
   }, [displayEdges, hoveredNodeId]);
 
   function handleExportSvg() {
-    const svgEl = svgRef.current;
-    if (!svgEl) return;
-
-    const clone = svgEl.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-
-    // The live SVG renders transparent, relying on the app's dark page
-    // background - add that back in explicitly so the exported file looks
-    // right when opened standalone (e.g. in a browser tab or an image
-    // viewer), not on a Space background.
-    const background = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    background.setAttribute("x", "0");
-    background.setAttribute("y", "0");
-    background.setAttribute("width", String(width));
-    background.setAttribute("height", String(height));
-    background.setAttribute("fill", "#093B5F"); // --panel, Deep Blue
-    clone.insertBefore(background, clone.firstChild);
-
-    const source =
-      '<?xml version="1.0" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([source], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "sankey-diagram.svg";
-    a.click();
-    URL.revokeObjectURL(url);
+    if (svgRef.current) downloadSvg(svgRef.current, width, height);
   }
 
   if (edges.length === 0) {
@@ -312,14 +246,7 @@ export function SankeyChart({
           {graph.links.map((link, i) => {
             const d = linkPath(link as never);
             if (!d) return null;
-            // d3-sankey mutates link.source/target into resolved node
-            // objects after layout, even though our SankeyLinkDatum type
-            // says they're plain strings - same reason linkPath() below
-            // needs the `as never` cast.
-            const resolvedSource = link.source as unknown as { id: string };
-            const resolvedTarget = link.target as unknown as { id: string };
-            const sourceId = resolvedSource.id;
-            const targetId = resolvedTarget.id;
+            const { sourceId, targetId } = resolvedLinkIds(link);
             const isPartOfHoveredFlow = hoveredFlowEdgeKeys?.has(
               edgeKey(sourceId, targetId),
             );

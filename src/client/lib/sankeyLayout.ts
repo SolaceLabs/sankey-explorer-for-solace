@@ -84,6 +84,17 @@ export interface SankeyLinkDatum {
   value: number;
 }
 
+/**
+ * d3-sankey mutates `link.source`/`link.target` from the string ids we passed
+ * in into resolved node objects during layout, while our SankeyLinkDatum type
+ * (correctly, for the INPUT) says string. This is the one place that knows
+ * about that, so callers read ids without their own casts.
+ */
+export function resolvedLinkIds(link: SankeyLinkDatum): { sourceId: string; targetId: string } {
+  const resolved = link as unknown as { source: { id: string }; target: { id: string } };
+  return { sourceId: resolved.source.id, targetId: resolved.target.id };
+}
+
 export function computeSankeyLayout(
   edges: SankeyEdge[],
   width: number,

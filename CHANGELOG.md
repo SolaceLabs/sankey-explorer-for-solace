@@ -17,6 +17,8 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- `SankeyChart` split: the edge pipeline (`buildDisplayEdges`) and SVG export (`exportSvg`) are
+  now pure, unit-tested modules; the d3 link-id casts live in one documented helper.
 - Server logs are now one JSON object per line (`timestamp`, `level`, `message`, `error`),
   which also prevents log forging via newlines in user-supplied values (CWE-117).
 - `GET /api/endpoints` now returns `{ endpoints, errors }`. One unreachable broker no longer
