@@ -2,7 +2,11 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import bcrypt from "bcryptjs";
 import { config } from "../config.js";
-import { clearBrokerConnections, getBrokerConnectionsStatus } from "../semp/connectionStore.js";
+import {
+  clearBrokerConnections,
+  getBrokerConnectionsStatus,
+  moveBrokerConnections,
+} from "../semp/connectionStore.js";
 
 export const authRouter = Router();
 
@@ -28,7 +32,8 @@ authRouter.post("/login", loginRateLimit, async (req, res) => {
     return;
   }
 
-  const { username, password } = req.body as { username?: unknown; password?: unknown };
+  // req.body is undefined when no JSON was sent (Express 5) - don't destructure it blindly.
+  const { username, password } = (req.body ?? {}) as { username?: unknown; password?: unknown };
   if (typeof username !== "string" || typeof password !== "string") {
     res.status(400).json({ error: "username and password are required" });
     return;
@@ -47,8 +52,18 @@ authRouter.post("/login", loginRateLimit, async (req, res) => {
     return;
   }
 
-  req.session.authenticated = true;
-  res.json({ authenticated: true });
+  // Fresh session id on privilege change (session fixation): an id planted
+  // or observed before login must not become an authenticated session.
+  const oldSessionId = req.sessionID;
+  req.session.regenerate((err) => {
+    if (err) {
+      res.status(500).json({ error: "Failed to log in" });
+      return;
+    }
+    moveBrokerConnections(oldSessionId, req.sessionID);
+    req.session.authenticated = true;
+    res.json({ authenticated: true });
+  });
 });
 
 authRouter.post("/logout", (req, res) => {

@@ -14,7 +14,7 @@ export interface EndpointInfo {
   subscriptions: string[];
   /**
    * The client-username SEMP reports as the endpoint's owner, if any.
-   * Undefined if the broker reply has no <owner> element (unverified for
+   * Undefined if the broker reply has no owner attribute (unverified for
    * topic-endpoints specifically - queues reliably have this, but whether
    * topic-endpoints do too needs checking against a real broker). Not
    * applicable to direct subscribers - always undefined for those.
@@ -32,14 +32,6 @@ export interface EndpointInfo {
   brokerHost: string;
 }
 
-export interface SempClientOptions {
-  baseUrl: string;
-  username: string;
-  password: string;
-  /** Minimum gap between requests in ms (Solace recommends <=10 req/s). */
-  minRequestIntervalMs: number;
-}
-
 /**
  * What a single broker query can produce on its own - it doesn't know
  * which broker connection it came from (that's a multi-connection concept
@@ -47,3 +39,29 @@ export interface SempClientOptions {
  * afterward).
  */
 export type RawEndpointInfo = Omit<EndpointInfo, "brokerLabel" | "brokerHost">;
+
+/** One broker connection that could not be queried (the others may still have succeeded). */
+export interface BrokerQueryError {
+  brokerLabel: string;
+  message: string;
+}
+
+/**
+ * Reply of GET /api/endpoints. A partial result is a valid 200: `endpoints`
+ * holds what the reachable brokers returned, `errors` names the ones that
+ * failed, so one dead broker in a multi-broker session doesn't blank the
+ * whole diagram. Only when EVERY broker fails does the route answer 502.
+ */
+export interface EndpointsResponse {
+  endpoints: EndpointInfo[];
+  errors: BrokerQueryError[];
+}
+
+/** What the API exposes about a broker connection - never credentials. */
+export interface BrokerConnectionStatus {
+  id: string;
+  label: string;
+  vpn: string;
+  baseUrl: string;
+  connectedAt: number;
+}

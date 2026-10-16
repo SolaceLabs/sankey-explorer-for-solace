@@ -1,15 +1,15 @@
 // EndpointType/EndpointInfo used to be declared here too, by hand, kept in
 // sync manually with the server's copy - now a single real definition in
 // src/shared, imported by both sides.
-export type { EndpointType, EndpointInfo } from "../shared/types.js";
+export type {
+  BrokerConnectionStatus,
+  BrokerQueryError,
+  EndpointType,
+  EndpointInfo,
+  EndpointsResponse,
+} from "../shared/types.js";
 
-export interface BrokerConnectionStatus {
-  id: string;
-  label: string;
-  vpn: string;
-  baseUrl: string;
-  connectedAt: number;
-}
+import type { BrokerConnectionStatus } from "../shared/types.js";
 
 export interface SessionInfo {
   authRequired: boolean;

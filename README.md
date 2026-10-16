@@ -45,6 +45,11 @@ login is optional (`APP_USERNAME` + `APP_PASSWORD_HASH` env vars) - leave
 both unset to run with no login at all. See `.env.example` for every
 available env var (all optional).
 
+**Security note:** with no login, anyone who can reach the app can make *it* call
+broker URLs. Link-local/cloud-metadata addresses are always refused; set
+`ALLOWED_BROKER_HOSTS` to restrict connections to your brokers, and `TRUST_PROXY=0`
+when running without a reverse proxy.
+
 ## Local development
 
 One npm package, one process - the server also runs the client dev server

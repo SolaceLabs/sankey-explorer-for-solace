@@ -1,53 +1,67 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { logError, logInfo } from "../logger.js";
 
-describe("logInfo", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-  it("writes to console.log with an ISO timestamp prefix", () => {
+function parsed(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown> {
+  expect(spy).toHaveBeenCalledOnce();
+  const line = spy.mock.calls[0]?.[0] as string;
+  // One event per line: the line itself must be exactly one JSON document.
+  expect(line).not.toContain("\n");
+  return JSON.parse(line) as Record<string, unknown>;
+}
+
+describe("logInfo", () => {
+  it("writes one JSON line to stdout with ISO timestamp, level and message", () => {
     const spy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     logInfo("hello world");
 
-    expect(spy).toHaveBeenCalledOnce();
-    const line = spy.mock.calls[0]?.[0] as string;
-    expect(line).toMatch(/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z\] hello world$/);
+    const event = parsed(spy);
+    expect(event.level).toBe("info");
+    expect(event.message).toBe("hello world");
+    expect(event.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
+
+  it("cannot be used to forge extra log lines (CWE-117): newlines in input stay inside the JSON string", () => {
+    const spy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    logInfo('Connected to http://x (label=evil\n{"level":"error","message":"forged"})');
+
+    const event = parsed(spy);
+    expect(event.level).toBe("info");
+    expect(event.message).toContain("forged"); // present as TEXT, not as a second event
   });
 });
 
 describe("logError", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("writes to console.error with a timestamp prefix and the error's stack", () => {
+  it("writes one JSON line to stderr including the error's name, message and stack", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const err = new Error("boom");
 
     logError("something failed", err);
 
-    expect(spy).toHaveBeenCalledOnce();
-    const [line, detail] = spy.mock.calls[0] as [string, unknown];
-    expect(line).toMatch(/^\[\d{4}-\d{2}-\d{2}T.*\] something failed$/);
-    expect(detail).toBe(err.stack);
+    const event = parsed(spy);
+    expect(event.level).toBe("error");
+    expect(event.message).toBe("something failed");
+    expect(event.error).toMatchObject({ name: "Error", message: "boom", stack: err.stack });
   });
 
-  it("still logs a message with no error argument, without an extra undefined", () => {
+  it("omits the error field when no error is given", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     logError("no error object here");
 
-    expect(spy).toHaveBeenCalledOnce();
-    expect(spy.mock.calls[0]).toHaveLength(1);
+    expect(parsed(spy)).not.toHaveProperty("error");
   });
 
-  it("logs non-Error values (e.g. a plain string throw) as-is", () => {
+  it("logs non-Error values (e.g. a plain string throw) as a string", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     logError("something failed", "a plain string error");
 
-    expect(spy.mock.calls[0]?.[1]).toBe("a plain string error");
+    expect(parsed(spy).error).toBe("a plain string error");
   });
 });

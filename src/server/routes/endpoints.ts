@@ -2,7 +2,6 @@ import { Router } from "express";
 import { requireAuth, requireBrokerConnection } from "../auth/middleware.js";
 import { listBrokerConnections } from "../semp/connectionStore.js";
 import { fetchEndpointsAcrossConnections } from "../semp/queries.js";
-import { SempError } from "../semp/client.js";
 import { logError } from "../logger.js";
 
 export const endpointsRouter = Router();
@@ -16,16 +15,17 @@ endpointsRouter.get(
     const connections = listBrokerConnections(req.sessionID);
 
     try {
-      // Fail-fast: if any one broker's query fails, the whole request fails
-      // (502). A future improvement could degrade gracefully (return the
-      // brokers that succeeded, flag the ones that didn't), but that needs
-      // its own response shape - not worth the complexity yet.
-      const endpoints = await fetchEndpointsAcrossConnections(connections);
-      res.json(endpoints);
+      const result = await fetchEndpointsAcrossConnections(connections);
+      // Partial results are a valid answer (see EndpointsResponse); only when
+      // EVERY broker failed is there nothing to show, so that is the 502.
+      if (result.errors.length === connections.length) {
+        res.status(502).json({ error: result.errors[0]!.message });
+        return;
+      }
+      res.json(result);
     } catch (err) {
-      const message = err instanceof SempError ? err.message : "Unexpected error";
-      logError("GET /api/endpoints failed while querying one or more brokers", err);
-      res.status(502).json({ error: message });
+      logError("GET /api/endpoints failed unexpectedly", err);
+      res.status(502).json({ error: "Unexpected error" });
     }
   },
 );

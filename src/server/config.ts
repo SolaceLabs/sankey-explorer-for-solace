@@ -20,7 +20,37 @@ export interface AppConfig {
   };
   loginRequired: boolean;
   isProduction: boolean;
+  /**
+   * If non-empty, only these broker hosts ("host" or "host:port") may be
+   * connected to - see semp/brokerUrlPolicy.ts (SSRF protection).
+   */
+  allowedBrokerHosts: string[];
+  /**
+   * Express "trust proxy" hop count: how many reverse proxies sit in front of
+   * this process. 0 = none (X-Forwarded-* headers are ignored, so clients can't
+   * spoof their IP to dodge rate limits). Default 1 (Cloud Run / one LB).
+   */
+  trustProxyHops: number;
 }
+
+function parseTrustProxyHops(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === "") return 1;
+  const hops = Number(raw);
+  if (!Number.isInteger(hops) || hops < 0) {
+    throw new Error(`TRUST_PROXY must be a non-negative integer (number of proxy hops), got "${raw}"`);
+  }
+  return hops;
+}
+
+function parseHostList(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .split(",")
+    .map((h) => h.trim())
+    .filter((h) => h.length > 0);
+}
+
+/** Session cookie lifetime - one workshop/work session. Also the hard TTL for in-memory broker connections. */
+export const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 
 /**
  * Pure function taking env as a parameter (rather than reading
@@ -70,6 +100,8 @@ export function buildConfig(env: NodeJS.ProcessEnv): AppConfig {
     },
     loginRequired: Boolean(username && passwordHash),
     isProduction: env.NODE_ENV === "production",
+    allowedBrokerHosts: parseHostList(env.ALLOWED_BROKER_HOSTS),
+    trustProxyHops: parseTrustProxyHops(env.TRUST_PROXY),
   };
 }
 

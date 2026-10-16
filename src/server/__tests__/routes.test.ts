@@ -85,16 +85,31 @@ describe("session cookie security (cookie.secure: 'auto')", () => {
   // broker" right after a successful connect. `secure: "auto"` fixes this
   // by deciding Secure from the ACTUAL request (req.secure, which honors
   // "trust proxy" + X-Forwarded-Proto) instead of NODE_ENV.
+  // A session (and its cookie) only exists once something modifies it - here
+  // a successful broker connect (see saveUninitialized in server.ts).
+  const connectBody = { baseUrl: "http://localhost:8080", vpn: "default", username: "ro", password: "x" };
+
   it("does not mark the session cookie Secure for a plain HTTP request", async () => {
-    const res = await request(app).get("/api/session");
+    const res = await request(app).post("/api/connection").send(connectBody);
     const setCookie = res.headers["set-cookie"]?.[0] ?? "";
+    expect(setCookie).toMatch(/sankey\.sid/);
     expect(setCookie).not.toMatch(/secure/i);
   });
 
   it("marks the session cookie Secure when a TLS-terminating reverse proxy reports https", async () => {
-    const res = await request(app).get("/api/session").set("X-Forwarded-Proto", "https");
+    const res = await request(app)
+      .post("/api/connection")
+      .set("X-Forwarded-Proto", "https")
+      .send(connectBody);
     const setCookie = res.headers["set-cookie"]?.[0] ?? "";
     expect(setCookie).toMatch(/secure/i);
+  });
+});
+
+describe("session creation (memory-growth guard)", () => {
+  it("does not create a session or cookie for a visitor who only reads /api/session", async () => {
+    const res = await request(app).get("/api/session");
+    expect(res.headers["set-cookie"]).toBeUndefined();
   });
 });
 
@@ -129,6 +144,21 @@ describe("connection + endpoints (full flow on one session)", () => {
       .send({ baseUrl: "ftp://host", vpn: "default", username: "ro", password: "x" });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/http or https/);
+  });
+
+  it("rejects a cloud-metadata baseUrl without ever calling it (SSRF)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const agent = request.agent(app);
+    const res = await agent.post("/api/connection").send({
+      baseUrl: "http://169.254.169.254/latest/meta-data",
+      vpn: "default",
+      username: "ro",
+      password: "x",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/link-local|metadata/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("400s when the broker ping fails (unreachable/bad credentials)", async () => {
@@ -226,7 +256,8 @@ describe("connection + endpoints (full flow on one session)", () => {
 
     const endpointsRes = await agent.get("/api/endpoints");
     expect(endpointsRes.status).toBe(200);
-    expect(endpointsRes.body).toEqual([
+    expect(endpointsRes.body.errors).toEqual([]);
+    expect(endpointsRes.body.endpoints).toEqual([
       {
         type: "queue",
         name: "orders-q",
@@ -250,6 +281,32 @@ describe("connection + endpoints (full flow on one session)", () => {
 
     const afterRemoveRes = await agent.get("/api/endpoints");
     expect(afterRemoveRes.status).toBe(400);
+  });
+
+  it("200s with a partial result when only one of two brokers fails", async () => {
+    const agent = request.agent(app);
+    await agent.post("/api/connection").send({
+      baseUrl: "http://good-broker:8080", vpn: "default", username: "ro", password: "x", label: "Good",
+    });
+    await agent.post("/api/connection").send({
+      baseUrl: "http://bad-broker:8080", vpn: "default", username: "ro", password: "x", label: "Bad",
+    });
+
+    const healthy = mockBrokerFetch();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        url.includes("bad-broker") ? Promise.reject(new Error("down")) : healthy(url),
+      ),
+    );
+
+    const res = await agent.get("/api/endpoints");
+
+    expect(res.status).toBe(200);
+    expect(res.body.endpoints.length).toBeGreaterThan(0);
+    expect(res.body.endpoints.every((e: { brokerLabel: string }) => e.brokerLabel === "Good")).toBe(true);
+    expect(res.body.errors).toHaveLength(1);
+    expect(res.body.errors[0].brokerLabel).toBe("Bad");
   });
 
   it("502s when the SEMP query itself fails after a successful connect", async () => {
@@ -285,5 +342,12 @@ describe("connection + endpoints (full flow on one session)", () => {
 
     const listRes = await agent.get("/api/connection");
     expect(listRes.body).toEqual([]);
+  });
+});
+
+describe("POST /api/connection - malformed bodies", () => {
+  it("400s (not 500s) when no JSON body is sent at all", async () => {
+    const res = await request(app).post("/api/connection");
+    expect(res.status).toBe(400);
   });
 });

@@ -274,7 +274,7 @@ describe("SankeyChart - SVG export", () => {
     await user.click(screen.getByRole("button", { name: "Export as SVG" }));
 
     expect(createObjectURL).toHaveBeenCalledOnce();
-    const blob = createObjectURL.mock.calls[0][0] as Blob;
+    const blob = createObjectURL.mock.calls[0]![0] as Blob;
     expect(blob.type).toBe("image/svg+xml");
     const text = await blob.text();
     expect(text).toContain("<svg");

@@ -9,7 +9,7 @@ import { buildBrokerColorPalette, buildEndpointBrokerColors } from "./lib/buildE
 import { buildEndpointBrokerLabels } from "./lib/buildEndpointBrokerLabels";
 import { buildEndpointVpnHost } from "./lib/buildEndpointVpnHost";
 import type { BrokerConfigEntry } from "./lib/brokerConfig";
-import type { BrokerConnectionStatus, EndpointInfo, SessionInfo } from "./types";
+import type { BrokerConnectionStatus, BrokerQueryError, EndpointInfo, SessionInfo } from "./types";
 import "./index.css";
 
 type ViewState =
@@ -17,7 +17,7 @@ type ViewState =
   | { kind: "error"; message: string }
   | { kind: "login" }
   | { kind: "connect" }
-  | { kind: "ready"; endpoints: EndpointInfo[] };
+  | { kind: "ready"; endpoints: EndpointInfo[]; errors: BrokerQueryError[] };
 
 function App() {
   const [session, setSession] = useState<SessionInfo | null>(null);
@@ -29,6 +29,19 @@ function App() {
   // here (rather than local to ConnectScreen) so it survives navigating to
   // the diagram view and back. See ConnectScreenProps for details.
   const [brokerConfigs, setBrokerConfigs] = useState<Map<string, BrokerConfigEntry>>(new Map());
+
+  const loadEndpoints = useCallback(async () => {
+    setView({ kind: "loading" });
+    try {
+      const { endpoints, errors } = await api.getEndpoints();
+      setView({ kind: "ready", endpoints, errors });
+    } catch (err) {
+      setView({
+        kind: "error",
+        message: err instanceof ApiRequestError ? err.message : "Failed to load endpoints",
+      });
+    }
+  }, []);
 
   const loadSession = useCallback(async () => {
     try {
@@ -47,23 +60,12 @@ function App() {
         message: err instanceof ApiRequestError ? err.message : "Could not reach the server",
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const loadEndpoints = useCallback(async () => {
-    setView({ kind: "loading" });
-    try {
-      const endpoints = await api.getEndpoints();
-      setView({ kind: "ready", endpoints });
-    } catch (err) {
-      setView({
-        kind: "error",
-        message: err instanceof ApiRequestError ? err.message : "Failed to load endpoints",
-      });
-    }
-  }, []);
+  }, [loadEndpoints]);
 
   useEffect(() => {
+    // Fetch-on-mount: loadSession only calls setState after awaiting the API, so this is
+    // synchronizing with an external system (the server), not a render-time cascade.
+    // oxlint-disable-next-line react/set-state-in-effect
     loadSession();
   }, [loadSession]);
 
@@ -77,8 +79,8 @@ function App() {
     setIsRefreshing(true);
     setRefreshError(null);
     try {
-      const endpoints = await api.getEndpoints();
-      setView({ kind: "ready", endpoints });
+      const { endpoints, errors } = await api.getEndpoints();
+      setView({ kind: "ready", endpoints, errors });
     } catch (err) {
       setRefreshError(
         err instanceof ApiRequestError ? err.message : "Refresh failed",
@@ -165,6 +167,12 @@ function App() {
         {view.kind === "ready" && (
           <div className="ready-view">
             {refreshError && <p className="error banner">{refreshError}</p>}
+            {view.errors.length > 0 && (
+              <p className="error banner" role="alert">
+                Some Message VPNs could not be loaded and are missing from the diagram:{" "}
+                {view.errors.map((e) => `${e.brokerLabel} (${e.message})`).join("; ")}
+              </p>
+            )}
             <SankeyChart
               edges={toSankeyEdges(view.endpoints)}
               endpointOwners={buildEndpointOwners(view.endpoints)}

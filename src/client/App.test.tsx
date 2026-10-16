@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import { api, ApiRequestError } from "./api/client";
-import type { EndpointInfo, SessionInfo } from "./types";
+import type { EndpointsResponse, SessionInfo } from "./types";
 
 vi.mock("./api/client", async () => {
   const actual = await vi.importActual<typeof import("./api/client")>("./api/client");
@@ -23,7 +23,7 @@ function session(overrides: Partial<SessionInfo> = {}): SessionInfo {
   return { authRequired: false, authenticated: true, brokers: [], ...overrides };
 }
 
-const oneEndpoint: EndpointInfo[] = [
+const oneEndpoint: EndpointsResponse = { errors: [], endpoints: [
   {
     type: "queue",
     name: "orders-q",
@@ -32,7 +32,7 @@ const oneEndpoint: EndpointInfo[] = [
     brokerLabel: "default",
     brokerHost: "localhost:8080",
   },
-];
+] };
 
 const connectedBroker = {
   id: "1",
@@ -77,6 +77,22 @@ describe("App - initial routing based on session", () => {
 
     expect(await screen.findByText("network down")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});
+
+describe("App - partial broker failures", () => {
+  it("still draws the reachable brokers and warns about the failed one", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue({
+      ...oneEndpoint,
+      errors: [{ brokerLabel: "EU-Broker", message: "HTTP 503" }],
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText("orders-q")).toBeInTheDocument();
+    expect(screen.getByText(/EU-Broker/)).toBeInTheDocument();
+    expect(screen.getByText(/HTTP 503/)).toBeInTheDocument();
   });
 });
 
