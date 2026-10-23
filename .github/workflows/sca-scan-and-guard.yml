@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   sca_scan:
-    uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@c689e87fd881013c2e5009bf6e751b49cae7527b # main
+    uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@fc6b754ed479d41f34a392c39d23b9853e130cbb # main
     with:
       # .fossa.yml lives under .github/, so the CLI has to be pointed at it.
       # Without this it silently falls back to defaults and registers the scan
