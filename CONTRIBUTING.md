@@ -41,7 +41,7 @@ git clone https://github.com/solacecommunity/<github-repo>
 Make your changes on a new git branch in your fork of the repository.
 
 ```sh
-git checkout -b my-fix-branch master
+git checkout -b my-fix-branch main
 ```
 
 #### Step 3: Commit
@@ -61,7 +61,7 @@ repository.
 
 ```sh
 $ git fetch upstream
-$ git rebase upstream/master
+$ git rebase upstream/main
 ```
 
 If you have not set the upstream, do so as follows:
@@ -70,7 +70,7 @@ If you have not set the upstream, do so as follows:
 $ git remote add upstream https://github.com/solacecommunity/<github-repo>
 ```
 
-If you have already pushed your fork, then do not rebase. Instead merge any changes from master that are not already part of your branch.
+If you have already pushed your fork, then do not rebase. Instead merge any changes from main that are not already part of your branch.
 
 #### Step 5: Push
 
@@ -82,7 +82,7 @@ git push origin my-fix-branch
 
 #### Step 6: Pull Request
 
-In GitHub, send a pull request to `<github-repo>:master`.
+In GitHub, send a pull request to `<github-repo>:main`.
 
 When fixing an existing issue, use the [commit message keywords](https://help.github.com/articles/closing-issues-via-commit-messages/) to close the associated GitHub issue.
 
@@ -108,19 +108,19 @@ those PRs automatically when:
 
 * the update is a **patch or minor** version bump,
 * the package did **not** change maintainers, and
-* every **required** status check on `master` has passed.
+* every **required** status check on `main` has passed.
 
 Major updates and updates without a semver version (e.g. SHA-pinned workflow refs) stay open for
 manual review. A PR with a failed check, a merge conflict or a pending required review is left open.
 
 The merge uses `GITHUB_TOKEN`, so no GitHub App is needed. Merges made with `GITHUB_TOKEN` do not
 trigger workflow runs, so after merging the script `.github/scripts/dependabot-merge-when-green.sh`
-starts `ci.yml`, `docker-publish.yml` and `sca-scan-and-guard.yml` on `master` via
+starts `ci.yml`, `docker-publish.yml` and `sca-scan-and-guard.yml` on `main` via
 `workflow_dispatch`.
 
 One-time setup for repository admins:
 
-1. **Ruleset / branch protection on `master`**: require pull requests and the status checks
+1. **Ruleset / branch protection on `main`**: require pull requests and the status checks
    `verify` (CI) and the SCA scan job. Without required checks nothing is merged; the workflow
    fails after 45 minutes with a hint.
    Do not enable *Require branches to be up to date before merging*: Dependabot does not rebase

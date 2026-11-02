@@ -1,9 +1,9 @@
 name: SCA Scan
 on:
   pull_request:
-    branches: [master]
+    branches: [main]
   push:
-    branches: [master]
+    branches: [main]
   # Allows the scan to be re-run against trunk without waiting for a push, which
   # matters when a merge commit carries [skip ci] and produces no run at all.
   workflow_dispatch:

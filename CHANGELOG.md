@@ -6,12 +6,12 @@ All notable changes to this project are documented here
 ## [Unreleased]
 
 ### Added
-- CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `master`.
+- CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
 - Dependabot auto-merge workflow: patch and minor updates are squash-merged automatically once
-  all required checks on `master` pass. Major, non-semver and maintainer-changed updates stay
+  all required checks on `main` pass. Major, non-semver and maintainer-changed updates stay
   manual. Merges use `GITHUB_TOKEN`; CI, Docker publish and SCA are then re-dispatched on
-  `master` because such merges trigger no workflow runs on their own.
+  `main` because such merges trigger no workflow runs on their own.
 - Explicit 3-day release-age cooldown for Dependabot version updates (all ecosystems).
 
 ### Added (security)
@@ -31,6 +31,11 @@ All notable changes to this project are documented here
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
 
 ### Fixed
+- Dependency advisories that failed the `npm audit` gate: `vitest` / `@vitest/coverage-v8`
+  raised to `^4.1.12`; lockfile refresh for `body-parser` 2.4.0, `undici` 8.12.3, `qs` 6.17.1
+  and `ip-address` 10.7.5.
+- Workflows (CI push, Docker publish, SCA scan, Dependabot auto-merge) still targeted `master`
+  after the default branch was renamed to `main`, so they never ran on `main`.
 - `POST /api/connection` and `/api/login` returned 500 instead of 400 when sent without a JSON
   body; the connect body is now validated by a typed, unit-tested `parseConnectBody` (with
   length limits) instead of an unchecked cast.

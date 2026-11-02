@@ -1,16 +1,16 @@
 name: Dependabot auto-merge
 
 # Squash-merges Dependabot PRs with patch and minor updates once every required
-# status check on master (CI `verify`, SCA scan) has passed, so this workflow never
+# status check on main (CI `verify`, SCA scan) has passed, so this workflow never
 # bypasses the pipeline. Major updates, non-semver updates (e.g. SHA-pinned refs
 # without a version) and updates whose package changed maintainers stay open.
 #
 # Uses GITHUB_TOKEN (no GitHub App needed). Because a merge made with GITHUB_TOKEN
 # triggers no workflow runs, the script re-dispatches CI, docker-publish and the
-# SCA scan on master after merging. Setup: see CONTRIBUTING.md.
+# SCA scan on main after merging. Setup: see CONTRIBUTING.md.
 on:
   pull_request:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
@@ -32,7 +32,7 @@ jobs:
     permissions:
       contents: write # merge
       pull-requests: write # merge
-      actions: write # re-dispatch master workflows
+      actions: write # re-dispatch workflows on main
       checks: read # read required check results
       statuses: read
     steps:
@@ -71,7 +71,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: .github/scripts
 
-      - name: Wait for required checks, merge and re-dispatch master workflows
+      - name: Wait for required checks, merge and re-dispatch workflows on main
         if: steps.policy.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
