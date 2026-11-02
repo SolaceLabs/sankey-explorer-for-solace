@@ -1,0 +1,82 @@
+name: Dependabot auto-merge
+
+# Squash-merges Dependabot PRs with patch and minor updates once every required
+# status check on master (CI `verify`, SCA scan) has passed, so this workflow never
+# bypasses the pipeline. Major updates, non-semver updates (e.g. SHA-pinned refs
+# without a version) and updates whose package changed maintainers stay open.
+#
+# Uses GITHUB_TOKEN (no GitHub App needed). Because a merge made with GITHUB_TOKEN
+# triggers no workflow runs, the script re-dispatches CI, docker-publish and the
+# SCA scan on master after merging. Setup: see CONTRIBUTING.md.
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  # A new push to the PR (e.g. a Dependabot rebase) cancels the waiting run.
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  merge-when-green:
+    # Both checks: the PR was opened by Dependabot AND this run was triggered by
+    # Dependabot (a human pushing to a Dependabot branch must not get auto-merge).
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write # merge
+      pull-requests: write # merge
+      actions: write # re-dispatch master workflows
+      checks: read # read required check results
+      statuses: read
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        # Also verifies that every commit on the PR was authored by Dependabot.
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      - name: Decide whether the update is eligible
+        id: policy
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          MAINTAINER_CHANGES: ${{ steps.metadata.outputs.maintainer-changes }}
+          DEPENDENCIES: ${{ steps.metadata.outputs.dependency-names }}
+        run: |
+          set -euo pipefail
+          eligible=false
+          case "$UPDATE_TYPE" in
+            version-update:semver-patch | version-update:semver-minor) eligible=true ;;
+          esac
+          # A new maintainer on a package is a supply-chain signal: review by hand.
+          if [ "$MAINTAINER_CHANGES" = "true" ]; then
+            eligible=false
+          fi
+          echo "Dependencies: $DEPENDENCIES"
+          echo "Update type: ${UPDATE_TYPE:-<none>}, maintainer changes: ${MAINTAINER_CHANGES:-<none>} -> eligible=$eligible"
+          echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
+
+      # The merge script is taken from the base commit, never from the PR head,
+      # so a PR cannot change the logic that merges it.
+      - name: Checkout merge script (base commit)
+        if: steps.policy.outputs.eligible == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Wait for required checks, merge and re-dispatch master workflows
+        if: steps.policy.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DISPATCH_REF: ${{ github.event.pull_request.base.ref }}
+        run: .github/scripts/dependabot-merge-when-green.sh
