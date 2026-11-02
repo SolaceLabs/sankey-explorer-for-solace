@@ -5,7 +5,7 @@ name: Build and publish Docker image
 # via the in-workflow verify job below.
 on:
   push:
-    branches: [master]
+    branches: [main]
     tags: ["v*"]
   workflow_dispatch: {}
 

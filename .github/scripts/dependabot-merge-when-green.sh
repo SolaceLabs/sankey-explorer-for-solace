@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Waits until every required status check of a pull request has passed, squash-merges
-# it and then re-dispatches the master workflows.
+# it and then re-dispatches the workflows on main.
 #
 # Why the re-dispatch: a merge made with GITHUB_TOKEN creates no new workflow runs, so
-# CI, docker-publish and the SCA manifest update would otherwise not run on master.
+# CI, docker-publish and the SCA manifest update would otherwise not run on main.
 # workflow_dispatch is the documented exception to that rule.
 #
 # Fails closed: if no required checks are reported (ruleset missing), the PR is never
@@ -18,7 +18,7 @@
 #                       the branch moved in the meantime                   (required)
 #   MAX_WAIT_SECONDS    give up after this long (default 2700)
 #   POLL_SECONDS        polling interval (default 30)
-#   DISPATCH_REF        branch to re-run workflows on (default master)
+#   DISPATCH_REF        branch to re-run workflows on (default main)
 #   DISPATCH_WORKFLOWS  space-separated workflow files
 #                       (default "ci.yml docker-publish.yml sca-scan-and-guard.yml")
 set -euo pipefail
@@ -29,7 +29,7 @@ set -euo pipefail
 : "${HEAD_SHA:?HEAD_SHA is required}"
 max_wait="${MAX_WAIT_SECONDS:-2700}"
 poll="${POLL_SECONDS:-30}"
-dispatch_ref="${DISPATCH_REF:-master}"
+dispatch_ref="${DISPATCH_REF:-main}"
 read -r -a workflows <<< "${DISPATCH_WORKFLOWS:-ci.yml docker-publish.yml sca-scan-and-guard.yml}"
 
 # Prints one of: pass | fail | pending | none
