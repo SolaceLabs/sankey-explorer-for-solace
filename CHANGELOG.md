@@ -31,6 +31,9 @@ All notable changes to this project are documented here
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
 
 ### Fixed
+- Dependency advisories that failed the `npm audit` gate: `vitest` / `@vitest/coverage-v8`
+  raised to `^4.1.12`; lockfile refresh for `body-parser` 2.4.0, `undici` 8.12.3, `qs` 6.17.1
+  and `ip-address` 10.7.5.
 - Workflows (CI push, Docker publish, SCA scan, Dependabot auto-merge) still targeted `master`
   after the default branch was renamed to `main`, so they never ran on `main`.
 - `POST /api/connection` and `/api/login` returned 500 instead of 400 when sent without a JSON
