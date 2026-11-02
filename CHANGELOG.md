@@ -8,6 +8,11 @@ All notable changes to this project are documented here
 ### Added
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `master`.
 - Dependabot for npm, GitHub Actions and Docker.
+- Dependabot auto-merge workflow: patch and minor updates are squash-merged automatically once
+  all required checks on `master` pass. Major, non-semver and maintainer-changed updates stay
+  manual. Merges use `GITHUB_TOKEN`; CI, Docker publish and SCA are then re-dispatched on
+  `master` because such merges trigger no workflow runs on their own.
+- Explicit 3-day release-age cooldown for Dependabot version updates (all ecosystems).
 
 ### Added (security)
 - SSRF protection on `POST /api/connection`: link-local/cloud-metadata addresses are always

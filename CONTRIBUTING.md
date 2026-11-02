@@ -6,6 +6,7 @@ We'd love for you to contribute and welcome your help. Here are some guidelines 
 - [Submitting a fix](#submitting)
 - [Feature Requests](#features)
 - [Questions](#questions)
+- [Dependency updates (Dependabot)](#dependabot)
 
 ## <a name="issue"></a> Did you find a issue?
 
@@ -98,3 +99,37 @@ That's it! Thank you for your contribution!
 ##  <a name="questions"></a> Do you have questions about the source code?
 
 * Ask any question about the code or how to use Solace technologies in the [Solace community](https://solace.community).
+
+## <a name="dependabot"></a> Dependency updates (Dependabot)
+
+Dependabot opens weekly PRs for npm, GitHub Actions and the Docker base image (with a 3-day
+release-age cooldown). The workflow `.github/workflows/dependabot-auto-merge.yml` squash-merges
+those PRs automatically when:
+
+* the update is a **patch or minor** version bump,
+* the package did **not** change maintainers, and
+* every **required** status check on `master` has passed.
+
+Major updates and updates without a semver version (e.g. SHA-pinned workflow refs) stay open for
+manual review. A PR with a failed check, a merge conflict or a pending required review is left open.
+
+The merge uses `GITHUB_TOKEN`, so no GitHub App is needed. Merges made with `GITHUB_TOKEN` do not
+trigger workflow runs, so after merging the script `.github/scripts/dependabot-merge-when-green.sh`
+starts `ci.yml`, `docker-publish.yml` and `sca-scan-and-guard.yml` on `master` via
+`workflow_dispatch`.
+
+One-time setup for repository admins:
+
+1. **Ruleset / branch protection on `master`**: require pull requests and the status checks
+   `verify` (CI) and the SCA scan job. Without required checks nothing is merged; the workflow
+   fails after 45 minutes with a hint.
+   Do not enable *Require branches to be up to date before merging*: Dependabot does not rebase
+   PRs that are merely behind, so they would stay unmerged.
+2. **Settings > General**: enable *Allow squash merging*.
+3. **Dependabot secrets** (Settings > Secrets and variables > *Dependabot*): workflows triggered by
+   Dependabot cannot read *Actions* secrets. Add `FOSSA_API_KEY` there as well, otherwise the SCA
+   scan fails on Dependabot PRs and nothing is merged.
+
+Known limitation: GitHub may refuse a `GITHUB_TOKEN` merge of a PR that changes files under
+`.github/workflows/` (GitHub Actions updates). Such a run fails at the merge step and the PR stays
+open for a manual merge.
