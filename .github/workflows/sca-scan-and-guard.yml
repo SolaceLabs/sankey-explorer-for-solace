@@ -40,7 +40,7 @@ jobs:
   update_manifest:
     needs: sca_scan
     if: needs.sca_scan.result == 'success'
-    uses: SolaceDev/solace-public-workflows/.github/workflows/update-manifest.yaml@c689e87fd881013c2e5009bf6e751b49cae7527b # main
+    uses: SolaceDev/solace-public-workflows/.github/workflows/update-manifest.yaml@d047a570daba53eec88770b5ba7d07964c056337 # main
     with:
       table_name: solace-cloud-manifest
       item: |
