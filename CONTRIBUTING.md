@@ -103,33 +103,40 @@ That's it! Thank you for your contribution!
 ## <a name="dependabot"></a> Dependency updates (Dependabot)
 
 Dependabot opens weekly PRs for npm, GitHub Actions and the Docker base image (with a 3-day
-release-age cooldown). The workflow `.github/workflows/dependabot-auto-merge.yml` squash-merges
-those PRs automatically when:
+release-age cooldown). The workflow `.github/workflows/dependabot-auto-merge.yml` enables
+GitHub's native **auto-merge (squash)** on those PRs when:
 
 * the update is a **patch or minor** version bump,
 * the package did **not** change maintainers, and
-* every **required** status check on `main` has passed.
+* the PR was opened and last pushed by Dependabot.
 
-Major updates and updates without a semver version (e.g. SHA-pinned workflow refs) stay open for
-manual review. A PR with a failed check, a merge conflict or a pending required review is left open.
+GitHub then merges the PR by itself once every **required** status check on `main` has passed. No
+runner waits for the checks. Major updates and updates without a semver version (e.g. SHA-pinned
+workflow refs) stay open for manual review. A PR with a failed check, a merge conflict or a pending
+required review is left open. If anyone other than Dependabot pushes to the PR, or the update stops
+being eligible, the workflow switches auto-merge off again.
 
-The merge uses `GITHUB_TOKEN`, so no GitHub App is needed. Merges made with `GITHUB_TOKEN` do not
-trigger workflow runs, so after merging the script `.github/scripts/dependabot-merge-when-green.sh`
-starts `ci.yml`, `docker-publish.yml` and `sca-scan-and-guard.yml` on `main` via
-`workflow_dispatch`.
+Auto-merge is enabled with a **GitHub App token**. A merge done on behalf of `GITHUB_TOKEN` would
+trigger no workflow runs, so CI, `docker-publish.yml` and the SCA manifest update would not run on
+`main`. With the App token the merge is a normal push to `main` and all workflows run as usual.
+
+Before enabling auto-merge the workflow checks that `main` requires the status check `verify`
+(ruleset or classic branch protection) and fails otherwise: without required checks GitHub would
+merge immediately, before the pipeline has run.
 
 One-time setup for repository admins:
 
 1. **Ruleset / branch protection on `main`**: require pull requests and the status checks
-   `verify` (CI) and the SCA scan job. Without required checks nothing is merged; the workflow
-   fails after 45 minutes with a hint.
+   `verify` (CI) and the SCA scan job. Do not add the App to the ruleset's *bypass list* - it
+   would then be allowed to merge before the checks pass.
    Do not enable *Require branches to be up to date before merging*: Dependabot does not rebase
    PRs that are merely behind, so they would stay unmerged.
-2. **Settings > General**: enable *Allow squash merging*.
-3. **Dependabot secrets** (Settings > Secrets and variables > *Dependabot*): workflows triggered by
-   Dependabot cannot read *Actions* secrets. Add `FOSSA_API_KEY` there as well, otherwise the SCA
-   scan fails on Dependabot PRs and nothing is merged.
-
-Known limitation: GitHub may refuse a `GITHUB_TOKEN` merge of a PR that changes files under
-`.github/workflows/` (GitHub Actions updates). Such a run fails at the merge step and the PR stays
-open for a manual merge.
+2. **Settings > General**: enable *Allow auto-merge* and *Allow squash merging*.
+3. **GitHub App** (org-owned, installed on this repository only), repository permissions:
+   *Contents*: read and write, *Pull requests*: read and write, *Workflows*: read and write
+   (needed to merge GitHub Actions updates that change `.github/workflows/`). No webhook needed.
+4. **Dependabot secrets** (Settings > Secrets and variables > *Dependabot*): workflows triggered by
+   Dependabot cannot read *Actions* secrets. Add
+   * `DEPENDABOT_AUTOMERGE_APP_CLIENT_ID` - the App's client ID,
+   * `DEPENDABOT_AUTOMERGE_APP_PRIVATE_KEY` - a private key of the App,
+   * `FOSSA_API_KEY` - otherwise the SCA scan fails on Dependabot PRs and nothing is merged.

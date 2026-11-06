@@ -8,10 +8,12 @@ All notable changes to this project are documented here
 ### Added
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
-- Dependabot auto-merge workflow: patch and minor updates are squash-merged automatically once
-  all required checks on `main` pass. Major, non-semver and maintainer-changed updates stay
-  manual. Merges use `GITHUB_TOKEN`; CI, Docker publish and SCA are then re-dispatched on
-  `main` because such merges trigger no workflow runs on their own.
+- Dependabot auto-merge workflow: GitHub's native auto-merge (squash) is enabled for patch and
+  minor updates, so GitHub merges them once all required checks on `main` pass. Major,
+  non-semver and maintainer-changed updates stay manual; auto-merge is switched off again when
+  someone else pushes to the PR. Auto-merge is enabled with a GitHub App token so the merge
+  triggers CI, Docker publish and SCA on `main`. The workflow refuses to run unless `main`
+  requires the `verify` check.
 - Explicit 3-day release-age cooldown for Dependabot version updates (all ecosystems).
 
 ### Added (security)

@@ -1,13 +1,14 @@
 name: Dependabot auto-merge
 
-# Squash-merges Dependabot PRs with patch and minor updates once every required
-# status check on main (CI `verify`, SCA scan) has passed, so this workflow never
-# bypasses the pipeline. Major updates, non-semver updates (e.g. SHA-pinned refs
-# without a version) and updates whose package changed maintainers stay open.
+# Turns on GitHub's native auto-merge (squash) for Dependabot PRs with patch and minor
+# updates. GitHub then merges on its own as soon as every required status check of `main`
+# (CI `verify`, SCA scan) has passed: the pipeline is never bypassed and no runner sits
+# polling. Major updates, non-semver updates (e.g. SHA-pinned refs without a version) and
+# updates whose package changed maintainers stay open for manual review.
 #
-# Uses GITHUB_TOKEN (no GitHub App needed). Because a merge made with GITHUB_TOKEN
-# triggers no workflow runs, the script re-dispatches CI, docker-publish and the
-# SCA scan on main after merging. Setup: see CONTRIBUTING.md.
+# Auto-merge is enabled with a GitHub App token, not GITHUB_TOKEN: a merge carried out on
+# behalf of GITHUB_TOKEN triggers no workflow runs, so CI, docker-publish and the SCA
+# manifest update would silently not run on main after the merge. Setup: CONTRIBUTING.md.
 on:
   pull_request:
     branches: [main]
@@ -16,34 +17,30 @@ permissions:
   contents: read
 
 concurrency:
-  # A new push to the PR (e.g. a Dependabot rebase) cancels the waiting run.
+  # A new push to the PR (e.g. a Dependabot rebase) cancels the older run.
   group: dependabot-auto-merge-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  merge-when-green:
-    # Both checks: the PR was opened by Dependabot AND this run was triggered by
-    # Dependabot (a human pushing to a Dependabot branch must not get auto-merge).
-    if: >-
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
-      github.actor == 'dependabot[bot]'
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 5
     permissions:
-      contents: write # merge
-      pull-requests: write # merge
-      actions: write # re-dispatch workflows on main
-      checks: read # read required check results
-      statuses: read
+      contents: read
+      pull-requests: write # turn auto-merge off again with GITHUB_TOKEN (see last step)
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
-        # Also verifies that every commit on the PR was authored by Dependabot.
+        # Only when Dependabot triggered the run: the action also verifies that every
+        # commit on the PR was authored by Dependabot and fails otherwise.
+        if: github.actor == 'dependabot[bot]'
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
 
       - name: Decide whether the update is eligible
         id: policy
         env:
+          ACTOR: ${{ github.actor }}
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
           MAINTAINER_CHANGES: ${{ steps.metadata.outputs.maintainer-changes }}
           DEPENDENCIES: ${{ steps.metadata.outputs.dependency-names }}
@@ -57,26 +54,79 @@ jobs:
           if [ "$MAINTAINER_CHANGES" = "true" ]; then
             eligible=false
           fi
-          echo "Dependencies: $DEPENDENCIES"
-          echo "Update type: ${UPDATE_TYPE:-<none>}, maintainer changes: ${MAINTAINER_CHANGES:-<none>} -> eligible=$eligible"
+          # Someone other than Dependabot pushed to the PR: it no longer contains only
+          # Dependabot's change, so it must not be merged without a human.
+          if [ "$ACTOR" != "dependabot[bot]" ]; then
+            eligible=false
+          fi
+          echo "Dependencies: ${DEPENDENCIES:-<none>}"
+          echo "Actor: $ACTOR, update type: ${UPDATE_TYPE:-<none>}, maintainer changes: ${MAINTAINER_CHANGES:-<none>} -> eligible=$eligible"
           echo "eligible=$eligible" >> "$GITHUB_OUTPUT"
 
-      # The merge script is taken from the base commit, never from the PR head,
-      # so a PR cannot change the logic that merges it.
-      - name: Checkout merge script (base commit)
-        if: steps.policy.outputs.eligible == 'true'
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          persist-credentials: false
-          sparse-checkout: .github/scripts
-
-      - name: Wait for required checks, merge and re-dispatch workflows on main
+      # `gh pr merge --auto` merges immediately (instead of enabling auto-merge) when the
+      # PR is already mergeable. Without required checks on main that would merge before
+      # the pipeline has run, so refuse unless main requires them (fail closed).
+      - name: Verify that main requires the pipeline checks
         if: steps.policy.outputs.eligible == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          REQUIRED_CHECKS: verify # space-separated status check names
+        run: |
+          set -euo pipefail
+          # Repository rulesets and classic branch protection can both require checks.
+          from_rulesets=$(gh api "repos/$GH_REPO/rules/branches/$BASE_REF" \
+            --jq '.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context')
+          from_protection=$(gh api "repos/$GH_REPO/branches/$BASE_REF" \
+            --jq '.protection.required_status_checks.contexts // [] | .[]')
+          required=$(printf '%s\n%s\n' "$from_rulesets" "$from_protection" | sed '/^$/d' | sort -u)
+          echo "Required checks on $BASE_REF: $(echo "$required" | paste -sd ' ' -)"
+          missing=''
+          for check in $REQUIRED_CHECKS; do
+            grep -qxF -- "$check" <<< "$required" || missing="$missing $check"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::$BASE_REF does not require the status check(s):$missing. Not enabling auto-merge - see CONTRIBUTING.md."
+            exit 1
+          fi
+
+      - name: Create GitHub App token
+        id: app-token
+        if: steps.policy.outputs.eligible == 'true'
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          # Dependabot-triggered runs only see Dependabot secrets, so both live there.
+          client-id: ${{ secrets.DEPENDABOT_AUTOMERGE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.DEPENDABOT_AUTOMERGE_APP_PRIVATE_KEY }}
+          # Scoped to this repository (default) and to what a merge needs. `workflows`
+          # is required to merge GitHub Actions updates that touch .github/workflows/.
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Enable auto-merge (squash)
+        if: steps.policy.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          DISPATCH_REF: ${{ github.event.pull_request.base.ref }}
-        run: .github/scripts/dependabot-merge-when-green.sh
+        # --match-head-commit: refuse if the branch moved after this run was triggered.
+        run: gh pr merge --auto --squash --match-head-commit "$HEAD_SHA" "$PR_URL"
+
+      # Auto-merge stays on across later pushes. If the PR is no longer eligible (foreign
+      # push, Dependabot switched it to a major version), switch it off again.
+      - name: Disable auto-merge for an ineligible PR
+        if: always() && steps.policy.outputs.eligible == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
+          enabled=$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')
+          if [ "$enabled" = "true" ]; then
+            gh pr merge --disable-auto "$PR_URL"
+            echo "::notice::Auto-merge disabled - the PR needs a manual review."
+          else
+            echo "Auto-merge is not enabled - nothing to do."
+          fi
