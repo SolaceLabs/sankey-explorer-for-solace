@@ -1,7 +1,5 @@
 name: SCA Scan
 on:
-  pull_request:
-    branches: [main]
   push:
     branches: [main]
   # Allows the scan to be re-run against trunk without waiting for a push, which
