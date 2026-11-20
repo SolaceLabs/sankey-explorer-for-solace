@@ -3,7 +3,7 @@ import { api, apiErrorMessage } from "./api/client";
 import { LoginScreen } from "./components/LoginScreen";
 import { ConnectScreen } from "./components/ConnectScreen";
 import { SankeyChart } from "./components/SankeyChart";
-import { VpnMenu } from "./components/VpnMenu";
+import { TopBar } from "./components/TopBar";
 import { buildBrokerColorPalette } from "./lib/buildEndpointBrokerColors";
 import { buildDiagramData } from "./lib/diagramData";
 import type { BrokerConfigEntry } from "./lib/brokerConfig";
@@ -114,60 +114,21 @@ function App() {
   // not drop the selection).
   const readyEndpoints = view.kind === "ready" ? view.endpoints : null;
   const diagramData = useMemo(() => readyEndpoints && buildDiagramData(readyEndpoints), [readyEndpoints]);
-  const hasBrokers = Boolean(session && session.brokers.length > 0);
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <img className="brand-icon" src="/sankey-explorer-app-icon.svg" alt="" width={34} height={34} />
-          <div className="brand-text">
-            <h1 className="brand-title">Sankey Explorer</h1>
-            <span className="brand-subtitle">for Solace</span>
-          </div>
-        </div>
-        {/* SankeyChart portals its search in here - see its searchSlot prop. */}
-        <div className="topbar-search" ref={setSearchSlot} />
-        <div className="topbar-actions">
-          {session && hasBrokers && (
-            <>
-              <VpnMenu
-                brokers={session.brokers}
-                colors={brokerColors}
-                onManage={() => setView({ kind: "connect" })}
-                onDisconnectAll={handleDisconnectAll}
-              />
-              <button
-                type="button"
-                className="icon-button icon-button--primary"
-                aria-label="Refresh"
-                title="Refresh"
-                aria-busy={isRefreshing}
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-              >
-                <svg
-                  className={isRefreshing ? "icon icon--spinning" : "icon"}
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path d="M20 11a8 8 0 1 0-2.3 5.7" />
-                  <path d="M20 4v7h-7" />
-                </svg>
-              </button>
-              {/* SankeyChart portals its export button in here (exportSlot). */}
-              <div className="topbar-export" ref={setExportSlot} />
-            </>
-          )}
-          {session?.authRequired && session.authenticated && (
-            <button type="button" className="button button--outline" onClick={handleLogout}>
-              Logout
-            </button>
-          )}
-        </div>
-      </header>
+      <TopBar
+        brokers={session?.brokers ?? []}
+        brokerColors={brokerColors}
+        showLogout={Boolean(session?.authRequired && session.authenticated)}
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
+        onManageBrokers={() => setView({ kind: "connect" })}
+        onDisconnectAll={handleDisconnectAll}
+        onLogout={handleLogout}
+        searchSlotRef={setSearchSlot}
+        exportSlotRef={setExportSlot}
+      />
 
       <main>
         {view.kind === "loading" && <p className="hint">Loading...</p>}
