@@ -40,6 +40,11 @@ that session - never written to disk, never sent anywhere but your broker.
   plaintext locally - handle it like a password file)
 - Counts queues/topic-endpoints with zero subscriptions in the toolbar
   (hover for their names) instead of quietly dropping them
+- **Live metrics overlay** (opt-in, ▶ in the diagram toolbar) - polls SEMP v2
+  every 5, 15 or 30 s and marks each endpoint as active, idle or backlog,
+  with in/out message rates and spool usage next to it, green links into
+  endpoints that are receiving right now, and full details plus an on-demand
+  consumer list in the detail panel. See [Live metrics](#live-metrics)
 
 ## How it works
 
@@ -56,6 +61,40 @@ available env var (all optional).
 broker URLs. Link-local/cloud-metadata addresses are always refused; set
 `ALLOWED_BROKER_HOSTS` to restrict connections to your brokers, and `TRUST_PROXY=0`
 when running without a reverse proxy.
+
+## Live metrics
+
+Press ▶ in the diagram toolbar to start polling; ⏸ pauses, ⟳ takes one sample
+right away. Polling is off by default, at most one request is in flight, and
+any configuration load (Refresh, managing or disconnecting Message VPNs)
+pauses it and clears the samples, so old numbers never sit on a new diagram.
+A failed poll keeps the last good sample and shows the error in the toolbar.
+
+What the overlay reads (SEMP v2 Monitor API, all `vpn/read-only`):
+
+| Endpoint | Attributes |
+|---|---|
+| Queue | `rxMsgRate`, `txMsgRate`, `averageRxMsgRate`, `averageTxMsgRate`, `msgSpoolUsage`, `maxMsgSpoolUsage`, `txUnackedMsgCount`, `ingressEnabled`, `egressEnabled` |
+| Topic endpoint | same, with `maxSpoolUsage` as the quota |
+| Direct subscriber (client) | `txMsgRate` / `averageTxMsgRate` (delivered to the client), `rxMsgRate` / `averageRxMsgRate` (published by it), `clientUsername` |
+| Consumers (on demand) | `.../queues/{name}/txFlows`, `.../topicEndpoints/{name}/txFlows` |
+
+One poll costs three `select`-limited list requests per Message VPN (more
+only past 100 objects per collection), within the app's usual SEMP throttle.
+
+Status rules: **active** - messages arriving or leaving; **backlog** - a
+queue/topic endpoint holds messages and its spool grew since the previous
+sample, is at 80% or more of its quota, or nothing is going out; **idle** -
+known, nothing moving. Endpoints without a value in the sample stay unmarked.
+
+Limits worth knowing, all from SEMP v2 itself:
+
+- There is no current message count or bind count on a queue or topic
+  endpoint (`spooledMsgCount` counts every message ever spooled), so the
+  backlog is shown in bytes and consumers are listed on request.
+- Rates exist per endpoint, not per topic, so only the last link into an
+  endpoint is colored - upstream topic links stay neutral.
+- Quotas come in MB and are read as 2^20 bytes for the fill level.
 
 ## Local development
 
