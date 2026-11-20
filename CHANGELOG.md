@@ -43,6 +43,10 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- Diagram colors live in one module (`lib/diagramColors.ts`): named brand colors, the role each
+  plays (topic, flow, Gradient 16, selection, labels, endpoint types, badges, broker palette,
+  export background) and `nodeFillColor`, instead of hex values spread over `SankeyChart`,
+  `SankeyNode`, `exportSvg` and `buildEndpointBrokerColors`.
 - Graph walking lives in one tested module (`lib/flowGraph.ts`: `nodeIdsOf`, `adjacencyOf`,
   `reachableFrom`, `appendTo`) instead of four hand-rolled copies in `filterToRelevantSubgraph`,
   `describeSelection`, `buildQueueSortKeys` and `removeCycles` (plus three node-id collectors);

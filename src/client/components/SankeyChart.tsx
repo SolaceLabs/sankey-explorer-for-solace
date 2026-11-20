@@ -9,7 +9,8 @@ import { describeSelection } from "../lib/describeSelection";
 import { columnHeadings } from "../lib/columnHeadings";
 import { nodeIdsOf } from "../lib/flowGraph";
 import type { EndpointBrokerColors } from "../lib/buildEndpointBrokerColors";
-import { endpointTypeOf, isEndpointNode } from "../lib/nodeKind";
+import { isEndpointNode } from "../lib/nodeKind";
+import { DIAGRAM_COLORS, nodeFillColor } from "../lib/diagramColors";
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
 import { DiagramToolbar } from "./DiagramToolbar";
 import { DiagramSearch } from "./DiagramSearch";
@@ -40,27 +41,6 @@ const FLOW_GRADIENT_ID = "sankey-flow-gradient";
 // Below this the columns and labels collide; narrower screens scroll the
 // diagram horizontally instead of squeezing it.
 const MIN_DIAGRAM_WIDTH = 720;
-
-// Solace Brand Book 2025 v3.0, p.17. Type colors match the Q / TE / DS
-// badges (see SankeyNode, EndpointTypeBadge, index.css).
-const TYPE_COLORS = { queue: "#00C895", topicEndpoint: "#C2F7FF", directSubscriber: "#FFFFFF" };
-
-function nodeColor(id: string, brokerColors: EndpointBrokerColors | undefined): string {
-  if (!isEndpointNode(id)) return "#C2F7FF"; // Secondary Light Blue - topic/hierarchy nodes
-
-  // With 2+ brokers connected, color endpoints by broker instead of by
-  // type - which broker an endpoint belongs to is the more useful signal
-  // once several brokers are merged, and the badge still shows the type.
-  if (brokerColors && brokerColors.brokerCount > 1) {
-    const color = brokerColors.colorByEndpointLabel.get(id);
-    if (color) return color;
-  }
-
-  const type = endpointTypeOf(id);
-  if (type === "queue") return TYPE_COLORS.queue;
-  if (type === "topic-endpoint") return TYPE_COLORS.topicEndpoint;
-  return TYPE_COLORS.directSubscriber;
-}
 
 const edgeKey = (source: string, target: string): string => `${source}\u0000${target}`;
 
@@ -242,8 +222,8 @@ export function SankeyChart({
                     diagram width - every highlighted link samples its slice of
                     the same left-to-right sweep instead of restarting per link. */}
                 <linearGradient id={FLOW_GRADIENT_ID} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={diagramWidth} y2={0}>
-                  <stop offset="0%" stopColor="#009193" />
-                  <stop offset="100%" stopColor="#093B5F" />
+                  <stop offset="0%" stopColor={DIAGRAM_COLORS.flowGradient[0]} />
+                  <stop offset="100%" stopColor={DIAGRAM_COLORS.flowGradient[1]} />
                 </linearGradient>
               </defs>
               <g>
@@ -272,7 +252,7 @@ export function SankeyChart({
                       <path
                         d={d}
                         fill="none"
-                        stroke={isHighlighted ? `url(#${FLOW_GRADIENT_ID})` : "#C2F7FF"}
+                        stroke={isHighlighted ? `url(#${FLOW_GRADIENT_ID})` : DIAGRAM_COLORS.flow}
                         strokeOpacity={isHighlighted ? 0.75 : 0.2}
                         strokeWidth={visualStrokeWidth}
                         style={{ pointerEvents: "none" }}
@@ -293,7 +273,7 @@ export function SankeyChart({
                       // Only a clicked selection dims the rest; hovering
                       // just adds the gradient to the hovered flow.
                       isDimmed={Boolean(!hoveredNodeId && highlight && !highlight.nodeIds.has(node.id))}
-                      color={nodeColor(node.id, endpointBrokerColors)}
+                      color={nodeFillColor(node.id, endpointBrokerColors)}
                       subLines={isEndpoint ? subLinesFor(node.id) : []}
                       onHover={setHoveredNodeId}
                       onSelect={(id) => select(id)}
