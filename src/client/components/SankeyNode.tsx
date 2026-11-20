@@ -3,7 +3,8 @@ import type { SankeyLinkDatum, SankeyNodeDatum } from "../lib/sankeyLayout";
 import { endpointDisplayName } from "../lib/endpointDisplayName";
 import { nodeDisplayLabel } from "../lib/nodeDisplayLabel";
 import { endpointTypeCode, endpointTypeLabel } from "../lib/nodeKind";
-import { BADGE_COLORS, DIAGRAM_COLORS } from "../lib/diagramColors";
+import { ACTIVITY_DOTS, BADGE_COLORS, DIAGRAM_COLORS } from "../lib/diagramColors";
+import type { EndpointActivity } from "../lib/endpointActivity";
 
 /** Badge geometry - sankeyLayout reserves ENDPOINT_BADGE_SPACE for it. */
 const BADGE_WIDTH = 26;
@@ -12,6 +13,7 @@ const BADGE_GAP = 8;
 const LABEL_OFFSET = 6;
 const LINE_HEIGHT = 12;
 const DIMMED_OPACITY = 0.35;
+const ACTIVITY_DOT_RADIUS = 4;
 
 interface SankeyNodeProps {
   node: LayoutNode<SankeyNodeDatum, SankeyLinkDatum>;
@@ -21,6 +23,10 @@ interface SankeyNodeProps {
   isDimmed: boolean;
   color: string;
   subLines: string[];
+  /** Live metrics verdict; draws a status dot on the bar unless "unknown". */
+  activity?: EndpointActivity | undefined;
+  /** Extra lines for the hover tooltip (live metrics). */
+  tooltipLines?: string[];
   onHover: (nodeId: string | null) => void;
   onSelect: (nodeId: string) => void;
 }
@@ -30,7 +36,18 @@ interface SankeyNodeProps {
  * label (left of the bar for topic levels, right of it for endpoints) and,
  * for endpoints, the Q / TE / DS type badge plus owner / VPN sub-lines.
  */
-export function SankeyNode({ node, isEndpoint, isSelected, isDimmed, color, subLines, onHover, onSelect }: SankeyNodeProps) {
+export function SankeyNode({
+  node,
+  isEndpoint,
+  isSelected,
+  isDimmed,
+  color,
+  subLines,
+  activity,
+  tooltipLines = [],
+  onHover,
+  onSelect,
+}: SankeyNodeProps) {
   const x0 = node.x0 ?? 0;
   const x1 = node.x1 ?? 0;
   const y0 = node.y0 ?? 0;
@@ -76,8 +93,20 @@ export function SankeyNode({ node, isEndpoint, isSelected, isDimmed, color, subL
         fill="transparent"
         {...hover}
       >
-        <title>{node.id} (click for details)</title>
+        <title>{[node.id, ...tooltipLines, "(click for details)"].join("\n")}</title>
       </rect>
+      {activity && activity.status !== "unknown" && (
+        <circle
+          className={`sankey-activity sankey-activity--${activity.status}`}
+          cx={(x0 + x1) / 2}
+          cy={(y0 + y1) / 2}
+          r={ACTIVITY_DOT_RADIUS}
+          fill={ACTIVITY_DOTS[activity.status].fill}
+          stroke={ACTIVITY_DOTS[activity.status].stroke}
+          strokeWidth={1.5}
+          style={{ pointerEvents: "none" }}
+        />
+      )}
       {code && (
         <g className="sankey-badge" {...hover}>
           <title>{endpointTypeLabel(node.id)}</title>

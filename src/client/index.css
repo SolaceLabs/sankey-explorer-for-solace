@@ -31,6 +31,12 @@
 
   --error: #E0685C;           /* not from the brand book - see comment above */
 
+  /* Live metrics status - same values as ACTIVITY_DOTS in diagramColors.ts
+     (the SVG needs literals for the export). */
+  --activity-active: #ABFF88;   /* Bright Green, as a filled dot */
+  --activity-backlog: #FCA829;  /* Orange - warning */
+  --activity-idle: rgba(255, 255, 255, 0.75); /* hollow ring */
+
   /* Three radii, nothing in between: controls are pills, surfaces (cards,
      panels, menus) 20px, entries inside a surface 12px. */
   --radius-pill: 999px;
@@ -1050,4 +1056,146 @@ input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
 .type-badge--ds {
   border: 1.5px solid var(--text);
   color: var(--text);
+}
+
+/* ---------- Live metrics (toolbar group, legend, selection panel) ---------- */
+
+.live-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.live-metrics-status {
+  white-space: nowrap;
+}
+
+.live-metrics-status--running .status-dot {
+  background: var(--activity-active);
+}
+
+.live-metrics-status--paused .status-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--activity-idle);
+}
+
+/* A long broker error must not push the toolbar apart; the full text is in the title. */
+.live-metrics-problem {
+  min-width: 0;
+}
+
+.live-metrics-problem-text {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-legend {
+  display: inline-flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.live-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.live-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.live-legend-dot--active {
+  background: var(--activity-active);
+}
+
+.live-legend-dot--backlog {
+  background: var(--activity-backlog);
+}
+
+.live-legend-dot--idle {
+  background: var(--bg);
+  border-color: var(--activity-idle);
+  box-shadow: none;
+}
+
+.selection-panel-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+
+.selection-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.selection-section-count {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.metrics-list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: var(--radius-inner);
+  background: rgba(3, 33, 59, 0.55);
+  font-size: 0.75rem;
+}
+
+.metrics-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.metrics-row dt {
+  color: var(--text-dim);
+}
+
+.metrics-row dd {
+  margin: 0;
+  text-align: right;
+  font-family: "Space Mono", monospace;
+}
+
+.pill--activity-active {
+  background: rgba(171, 255, 136, 0.15);
+  color: var(--activity-active);
+}
+
+.pill--activity-backlog {
+  background: rgba(252, 168, 41, 0.15);
+  color: var(--activity-backlog);
+}
+
+.pill--activity-idle,
+.pill--activity-unknown {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+}
+
+.consumers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.consumers-head .selection-section-title {
+  margin: 0;
 }

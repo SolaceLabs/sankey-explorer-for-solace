@@ -13,6 +13,7 @@ vi.mock("./api/client", async () => {
       ...actual.api,
       getSession: vi.fn(),
       getEndpoints: vi.fn(),
+      getMetrics: vi.fn(),
       logout: vi.fn(),
       disconnectAll: vi.fn(),
     },
@@ -235,5 +236,45 @@ describe("App - diagram selection", () => {
 
     expect(await screen.findByText("broker unreachable")).toBeInTheDocument();
     expect(details()).toBeInTheDocument();
+  });
+});
+
+describe("App - live metrics", () => {
+  const metricsSample = {
+    sampledAt: 1,
+    errors: [],
+    metrics: [
+      {
+        type: "queue" as const,
+        name: "orders-q",
+        brokerLabel: "default",
+        inbound: { current: 12, oneMinuteAverage: 12 },
+        outbound: { current: 12, oneMinuteAverage: 12 },
+        spool: { usageBytes: 0, quotaBytes: null, unackedMsgCount: 0 },
+        ingressEnabled: true,
+        egressEnabled: true,
+      },
+    ],
+  };
+
+  it("draws live metrics once started, and pauses and clears them when the configuration is reloaded", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+    vi.mocked(api.getMetrics).mockResolvedValue(metricsSample);
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByText("orders-q");
+    expect(api.getMetrics).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Start live metrics" }));
+    expect(await screen.findByText("in 12/s · out 12/s · 0 B")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/^Live · updated/);
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() => expect(screen.queryByText("in 12/s · out 12/s · 0 B")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Start live metrics" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Paused");
   });
 });

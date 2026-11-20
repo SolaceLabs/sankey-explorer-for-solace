@@ -34,6 +34,22 @@ export const DIAGRAM_COLORS = {
   exportBackground: BRAND.deepBlue,
 } as const;
 
+/**
+ * Live metrics overlay: the status dot on an endpoint bar and the links
+ * into it. Active and backlog are FILLED dots (Bright Green - the
+ * selection is an outline around the whole bar, so the two never look
+ * alike - and the brand orange that already means "warning"); idle is a
+ * hollow ring, so the states differ in shape too, not only in color.
+ */
+export const ACTIVITY_DOTS: Readonly<Record<"active" | "backlog" | "idle", { fill: string; stroke: string }>> = {
+  active: { fill: BRAND.brightGreen, stroke: BRAND.darkBlue },
+  backlog: { fill: BRAND.orange, stroke: BRAND.darkBlue },
+  idle: { fill: BRAND.darkBlue, stroke: "rgba(255, 255, 255, 0.75)" },
+};
+
+/** Links into an endpoint that is receiving messages right now. */
+export const ACTIVE_FLOW_COLOR = BRAND.classicGreen;
+
 /** Endpoint bars with a single broker; the badges use the same colors. */
 export const ENDPOINT_TYPE_COLORS: Readonly<Record<EndpointType, string>> = {
   queue: BRAND.classicGreen,

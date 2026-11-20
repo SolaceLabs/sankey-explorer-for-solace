@@ -6,6 +6,9 @@ import { SankeyChart } from "./components/SankeyChart";
 import { TopBar } from "./components/TopBar";
 import { buildBrokerColorPalette } from "./lib/buildEndpointBrokerColors";
 import { buildDiagramData } from "./lib/diagramData";
+import { buildLiveMetricsView } from "./lib/liveMetricsView";
+import { useMetricsPolling } from "./components/useMetricsPolling";
+import { MetricsControls } from "./components/MetricsControls";
 import type { BrokerConfigEntry } from "./lib/brokerConfig";
 import type { BrokerConnectionStatus, BrokerQueryError, EndpointInfo, SessionInfo } from "./types";
 import "./index.css";
@@ -31,8 +34,15 @@ function App() {
   // so the chart re-renders once it exists).
   const [searchSlot, setSearchSlot] = useState<HTMLDivElement | null>(null);
   const [exportSlot, setExportSlot] = useState<HTMLDivElement | null>(null);
+  // Bumped whenever a configuration load starts (or the brokers go away):
+  // live metrics polling pauses and drops its samples on every change, so
+  // metrics from an older configuration are never drawn on a newer one.
+  const [configGeneration, setConfigGeneration] = useState(0);
+  const metricsPolling = useMetricsPolling(configGeneration);
+  const startConfigLoad = useCallback(() => setConfigGeneration((g) => g + 1), []);
 
   const loadEndpoints = useCallback(async () => {
+    startConfigLoad();
     setView({ kind: "loading" });
     try {
       const { endpoints, errors } = await api.getEndpoints();
@@ -43,7 +53,7 @@ function App() {
         message: apiErrorMessage(err, "Failed to load endpoints"),
       });
     }
-  }, []);
+  }, [startConfigLoad]);
 
   const loadSession = useCallback(async () => {
     try {
@@ -78,6 +88,7 @@ function App() {
   }
 
   async function handleRefresh() {
+    startConfigLoad();
     setIsRefreshing(true);
     setRefreshError(null);
     try {
@@ -93,11 +104,13 @@ function App() {
   }
 
   async function handleLogout() {
+    startConfigLoad();
     await api.logout();
     await loadSession();
   }
 
   async function handleDisconnectAll() {
+    startConfigLoad();
     await api.disconnectAll();
     setSession((prev) => (prev ? { ...prev, brokers: [] } : prev));
     setBrokerConfigs(new Map());
@@ -114,6 +127,11 @@ function App() {
   // not drop the selection).
   const readyEndpoints = view.kind === "ready" ? view.endpoints : null;
   const diagramData = useMemo(() => readyEndpoints && buildDiagramData(readyEndpoints), [readyEndpoints]);
+  const { current: currentSample, previous: previousSample } = metricsPolling.state;
+  const liveMetrics = useMemo(
+    () => (readyEndpoints ? buildLiveMetricsView(readyEndpoints, currentSample, previousSample) : null),
+    [readyEndpoints, currentSample, previousSample],
+  );
 
   return (
     <div className="app">
@@ -123,7 +141,11 @@ function App() {
         showLogout={Boolean(session?.authRequired && session.authenticated)}
         isRefreshing={isRefreshing}
         onRefresh={handleRefresh}
-        onManageBrokers={() => setView({ kind: "connect" })}
+        onManageBrokers={() => {
+          // Managing connections ends this configuration's live metrics.
+          startConfigLoad();
+          setView({ kind: "connect" });
+        }}
         onDisconnectAll={handleDisconnectAll}
         onLogout={handleLogout}
         onSearchSlotMount={setSearchSlot}
@@ -159,7 +181,13 @@ function App() {
                 {view.errors.map((e) => `${e.brokerLabel} (${e.message})`).join("; ")}
               </p>
             )}
-            <SankeyChart {...diagramData} searchSlot={searchSlot} exportSlot={exportSlot} />
+            <SankeyChart
+              {...diagramData}
+              searchSlot={searchSlot}
+              exportSlot={exportSlot}
+              liveMetrics={liveMetrics}
+              metricsControls={<MetricsControls polling={metricsPolling} />}
+            />
           </div>
         )}
       </main>

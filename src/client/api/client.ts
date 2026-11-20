@@ -1,11 +1,11 @@
 import type {
   ApiError,
   BrokerConnectionStatus,
+  ConsumerLookup,
   ConsumersResponse,
   EndpointsResponse,
   MetricsResponse,
   SessionInfo,
-  SpooledEndpointMetrics,
 } from "../types";
 
 export class ApiRequestError extends Error {}
@@ -87,9 +87,3 @@ export const api = {
   },
 };
 
-/** Which endpoint's consumers to list - the same identity the metrics carry. */
-export interface ConsumerLookup {
-  brokerLabel: string;
-  type: SpooledEndpointMetrics["type"];
-  name: string;
-}

@@ -20,6 +20,16 @@ All notable changes to this project are documented here
   `useMetricsPolling` (pure `metricsPollingReducer` inside) polls with a `setTimeout` chain, at
   most one request in flight, aborts on pause/reset/unmount, keeps the last good sample on
   errors and pauses and clears itself when its `resetKey` (the loaded configuration) changes.
+- Live metrics overlay in the diagram: toolbar group with start/pause, interval (5 s / 15 s /
+  30 s), "Refresh now", polling state with the time of the last good sample, transient poll and
+  per-broker errors (the last good sample and the diagram stay), and a legend. Endpoints get a
+  status dot (filled green active, filled orange backlog, hollow idle) and a bounded metrics line
+  (`in / out msg/s · spool size and fill level ↑/↓`), whose width the layout reserves once so it
+  doesn't jump per poll; links into receiving endpoints turn green, links into idle ones fade.
+  Node tooltips spell the status out. The detail panel shows the endpoint's rates (current and
+  1-minute average), spool, quota, trend, unacked and ingress/egress state, plus an on-demand
+  consumer list for queues and topic endpoints. Loading a configuration (initial load, Refresh,
+  managing or disconnecting Message VPNs, logout) pauses polling and clears all samples.
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
 - Dependabot auto-merge workflow: GitHub's native auto-merge (squash) is enabled for patch and

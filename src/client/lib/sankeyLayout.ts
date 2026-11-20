@@ -6,6 +6,7 @@ import { buildQueueSortKeys } from "./buildQueueSortKeys";
 import { nodeDisplayLabel } from "./nodeDisplayLabel";
 import { endpointDisplayName } from "./endpointDisplayName";
 import { isEndpointNode } from "./nodeKind";
+import { METRICS_SUB_LINE_TEMPLATE } from "./formatMetrics";
 
 export type SortMode = "topic" | "queue" | "owner" | "messageVpn" | "crossing";
 
@@ -44,6 +45,7 @@ function computeLabelMargins(
   width: number,
   endpointOwners?: Map<string, string>,
   endpointVpnHost?: Map<string, string>,
+  reserveMetricsLine = false,
 ): { left: number; right: number } {
   let maxLeftWidth = 0;
   let maxRightWidth = 0;
@@ -57,6 +59,10 @@ function computeLabelMargins(
 
       const vpnHost = endpointVpnHost?.get(id);
       if (vpnHost) lineWidths.push(estimateWidth(vpnHost, SUB_FONT_SIZE));
+
+      // Live metrics change every poll: reserve their widest possible line
+      // up front so the layout does not jump on each sample.
+      if (reserveMetricsLine) lineWidths.push(estimateWidth(METRICS_SUB_LINE_TEMPLATE, SUB_FONT_SIZE));
 
       maxRightWidth = Math.max(maxRightWidth, Math.max(...lineWidths) + ENDPOINT_BADGE_SPACE_PX);
     } else {
@@ -105,6 +111,8 @@ export function computeSankeyLayout(
   endpointOwners?: Map<string, string>,
   endpointBrokerLabels?: Map<string, string>,
   endpointVpnHost?: Map<string, string>,
+  /** Endpoints show a live metrics line (see SankeyNode) - reserve label width for it. */
+  reserveMetricsLine = false,
 ): SankeyGraph<SankeyNodeDatum, SankeyLinkDatum> {
   const { acyclicEdges, removedEdges } = removeCycles(edges);
   if (removedEdges.length > 0) {
@@ -150,6 +158,7 @@ export function computeSankeyLayout(
     width,
     endpointOwners,
     endpointVpnHost,
+    reserveMetricsLine,
   );
 
   const layout = sankey<SankeyNodeDatum, SankeyLinkDatum>()

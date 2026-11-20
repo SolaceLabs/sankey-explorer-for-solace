@@ -4,6 +4,10 @@ import { endpointDisplayName } from "../lib/endpointDisplayName";
 import { countLabel } from "../lib/countLabel";
 import { EndpointTypeBadge } from "./EndpointTypeBadge";
 import { useViewportFitHeight } from "./useViewportFitHeight";
+import { EndpointMetricsSection } from "./EndpointMetricsSection";
+import { ConsumerFlowsSection } from "./ConsumerFlowsSection";
+import type { ConsumerLookup, EndpointMetrics } from "../types";
+import type { EndpointActivity } from "../lib/endpointActivity";
 
 /** Same as the panel's sticky `top` in index.css (1rem). */
 const STICKY_GAP_PX = 16;
@@ -14,6 +18,10 @@ interface SelectionPanelProps {
   onToggleFocus: () => void;
   onClose: () => void;
   endpointOwners?: Map<string, string>;
+  /** Live metrics for the selected endpoint; omitted when the host has no overlay. */
+  live?: { hasSample: boolean; metrics: EndpointMetrics | undefined; activity: EndpointActivity | undefined };
+  /** Set for a selected queue or topic endpoint: enables the on-demand consumer list. */
+  consumerLookup?: ConsumerLookup | undefined;
 }
 
 function EndpointItem({ endpoint, owner }: { endpoint: ReachedEndpoint; owner?: string }) {
@@ -41,7 +49,15 @@ function EndpointItem({ endpoint, owner }: { endpoint: ReachedEndpoint; owner?: 
  * subscription or wildcard coverage), or which subscriptions an endpoint
  * declares. All content comes from describeSelection.
  */
-export function SelectionPanel({ details, isFocused, onToggleFocus, onClose, endpointOwners }: SelectionPanelProps) {
+export function SelectionPanel({
+  details,
+  isFocused,
+  onToggleFocus,
+  onClose,
+  endpointOwners,
+  live,
+  consumerLookup,
+}: SelectionPanelProps) {
   const [copied, setCopied] = useState(false);
   const panelRef = useRef<HTMLElement>(null);
   const maxHeight = useViewportFitHeight(panelRef, STICKY_GAP_PX);
@@ -111,6 +127,8 @@ export function SelectionPanel({ details, isFocused, onToggleFocus, onClose, end
               </li>
             ))}
           </ul>
+          {live && <EndpointMetricsSection {...live} />}
+          {consumerLookup && <ConsumerFlowsSection key={details.id} lookup={consumerLookup} />}
         </>
       )}
 

@@ -24,6 +24,8 @@ interface DiagramToolbarProps {
   leading?: ReactNode;
   /** Rendered last in the bar - the export button, when no header slot hosts it. */
   trailing?: ReactNode;
+  /** The live metrics controls (start/pause, interval, status), when the host provides them. */
+  liveMetrics?: ReactNode;
 }
 
 const VIEW_MODES: { value: DiagramViewMode; label: string }[] = [
@@ -81,6 +83,8 @@ export function DiagramToolbar(props: DiagramToolbarProps) {
           ))}
         </select>
       </label>
+
+      {props.liveMetrics}
 
       <div className="toolbar-spacer" />
 

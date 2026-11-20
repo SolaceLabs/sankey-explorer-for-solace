@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { computeSankeyLayout, type SortMode } from "../lib/sankeyLayout";
 import { buildDisplayEdges, type DiagramViewMode } from "../lib/buildDisplayEdges";
@@ -12,6 +12,9 @@ import type { EndpointBrokerColors } from "../lib/buildEndpointBrokerColors";
 import { isEndpointNode } from "../lib/nodeKind";
 import { nodeFillColor } from "../lib/diagramColors";
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
+import { activityTooltip, linkActivityOf, liveDetailsFor, type LiveMetricsView } from "../lib/liveMetricsView";
+import { metricsSubLine } from "../lib/formatMetrics";
+import type { ConsumerLookup } from "../types";
 import { DiagramToolbar } from "./DiagramToolbar";
 import { DiagramSearch } from "./DiagramSearch";
 import { ExportSvgButton } from "./ExportSvgButton";
@@ -38,6 +41,15 @@ interface SankeyChartProps {
   searchSlot?: HTMLElement | null;
   /** Where to render the export button - same contract as searchSlot. */
   exportSlot?: HTMLElement | null;
+  /**
+   * Live metrics overlay. `undefined`: the host has no live metrics at all;
+   * `null`: it has, but no sample yet (or it was reset).
+   */
+  liveMetrics?: LiveMetricsView | null;
+  /** The live metrics toolbar controls, rendered inside the diagram toolbar. */
+  metricsControls?: ReactNode;
+  /** Node id -> lookup key for the on-demand consumer list of queues/topic endpoints. */
+  consumerLookups?: Map<string, ConsumerLookup>;
 }
 
 // Below this the columns and labels collide; narrower screens scroll the
@@ -57,6 +69,9 @@ export function SankeyChart({
   unsubscribedEndpoints = [],
   searchSlot,
   exportSlot,
+  liveMetrics,
+  metricsControls,
+  consumerLookups,
 }: SankeyChartProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -90,9 +105,12 @@ export function SankeyChart({
   const diagramWidth = Math.max(width, MIN_DIAGRAM_WIDTH);
   const height = Math.max(MIN_DIAGRAM_HEIGHT, nodeIdsOf(displayEdges).length * HEIGHT_PER_NODE);
   const vpnHosts = endpointBrokerColors && endpointBrokerColors.brokerCount > 1 ? endpointVpnHost : undefined;
+  // A boolean, not the view itself: the layout must not recompute per poll.
+  const showsMetricsLine = Boolean(liveMetrics);
   const graph = useMemo(
-    () => computeSankeyLayout(displayEdges, diagramWidth, height, sortMode, endpointOwners, endpointBrokerLabels, vpnHosts),
-    [displayEdges, diagramWidth, height, sortMode, endpointOwners, endpointBrokerLabels, vpnHosts],
+    () =>
+      computeSankeyLayout(displayEdges, diagramWidth, height, sortMode, endpointOwners, endpointBrokerLabels, vpnHosts, showsMetricsLine),
+    [displayEdges, diagramWidth, height, sortMode, endpointOwners, endpointBrokerLabels, vpnHosts, showsMetricsLine],
   );
 
   // Hover wins over the selection, so pointing at something else while a
@@ -143,6 +161,7 @@ export function SankeyChart({
         isFocused={isFocused}
         onBackToOverview={() => select(selectedId, false)}
         trailing={exportSlot === undefined ? exportButton : null}
+        liveMetrics={metricsControls}
       />
       <div className="sankey-workspace">
         <div ref={canvasRef} className="sankey-canvas">
@@ -159,12 +178,16 @@ export function SankeyChart({
                 links={graph.links}
                 diagramWidth={diagramWidth}
                 highlightedEdgeKeys={highlight?.edgeKeys ?? null}
+                linkActivity={liveMetrics ? (targetId) => linkActivityOf(liveMetrics, targetId) : undefined}
                 onHover={setHoveredNodeId}
                 onSelect={(id) => select(id)}
               />
               <g>
                 {graph.nodes.map((node) => {
                   const isEndpoint = isEndpointNode(node.id);
+                  const metrics = liveMetrics?.byNodeId.get(node.id);
+                  const activity = liveMetrics?.activity.get(node.id);
+                  const staticLines = isEndpoint ? endpointSubLines(node.id, { owners: endpointOwners, vpnHosts }) : [];
                   return (
                     <SankeyNode
                       key={node.id}
@@ -175,7 +198,9 @@ export function SankeyChart({
                       // just adds the gradient to the hovered flow.
                       isDimmed={Boolean(!hoveredNodeId && highlight && !highlight.nodeIds.has(node.id))}
                       color={nodeFillColor(node.id, endpointBrokerColors)}
-                      subLines={isEndpoint ? endpointSubLines(node.id, { owners: endpointOwners, vpnHosts }) : []}
+                      subLines={metrics && activity ? [...staticLines, metricsSubLine(metrics, activity)] : staticLines}
+                      activity={activity}
+                      tooltipLines={activityTooltip(metrics, activity)}
                       onHover={setHoveredNodeId}
                       onSelect={(id) => select(id)}
                     />
@@ -192,6 +217,8 @@ export function SankeyChart({
             onToggleFocus={() => select(details.id, !isFocused)}
             onClose={() => select(null)}
             endpointOwners={endpointOwners}
+            live={liveDetailsFor(liveMetrics, details.id)}
+            consumerLookup={consumerLookups?.get(details.id)}
           />
         )}
       </div>

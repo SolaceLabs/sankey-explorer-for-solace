@@ -1,6 +1,7 @@
 import { sankeyLinkHorizontal, type SankeyLink } from "d3-sankey";
 import { resolvedLinkIds, type SankeyLinkDatum, type SankeyNodeDatum } from "../lib/sankeyLayout";
-import { DIAGRAM_COLORS } from "../lib/diagramColors";
+import { ACTIVE_FLOW_COLOR, DIAGRAM_COLORS } from "../lib/diagramColors";
+import type { LinkActivity } from "../lib/liveMetricsView";
 import { edgeKey } from "../lib/flowHighlight";
 
 const FLOW_GRADIENT_ID = "sankey-flow-gradient";
@@ -13,6 +14,8 @@ interface SankeyLinksProps {
   diagramWidth: number;
   /** Edges of the hovered or selected flow; null while nothing is. */
   highlightedEdgeKeys: ReadonlySet<string> | null;
+  /** Live metrics: whether the endpoint a link leads into is receiving; null = no data. */
+  linkActivity?: (targetId: string) => LinkActivity | null;
   /** A link stands for its TARGET node, exactly like that node's block and label. */
   onHover: (nodeId: string | null) => void;
   onSelect: (nodeId: string) => void;
@@ -23,7 +26,18 @@ interface SankeyLinksProps {
  * highlighted flow changes; every other link keeps its normal look while
  * something is hovered or selected.
  */
-export function SankeyLinks({ links, diagramWidth, highlightedEdgeKeys, onHover, onSelect }: SankeyLinksProps) {
+/**
+ * Normal look, then the live-metrics variants. The highlighted flow wins
+ * over all of them; while one is highlighted, active links step back to
+ * the normal strength so they don't outshine it.
+ */
+const LINK_STYLES: Record<LinkActivity | "default", { stroke: string; opacity: number; opacityBehindHighlight: number }> = {
+  default: { stroke: DIAGRAM_COLORS.flow, opacity: 0.2, opacityBehindHighlight: 0.2 },
+  active: { stroke: ACTIVE_FLOW_COLOR, opacity: 0.5, opacityBehindHighlight: 0.2 },
+  idle: { stroke: DIAGRAM_COLORS.flow, opacity: 0.08, opacityBehindHighlight: 0.08 },
+};
+
+export function SankeyLinks({ links, diagramWidth, highlightedEdgeKeys, linkActivity, onHover, onSelect }: SankeyLinksProps) {
   return (
     <>
       <defs>
@@ -44,6 +58,8 @@ export function SankeyLinks({ links, diagramWidth, highlightedEdgeKeys, onHover,
           const { sourceId, targetId } = resolvedLinkIds(link);
           const isHighlighted = highlightedEdgeKeys?.has(edgeKey(sourceId, targetId)) ?? false;
           const strokeWidth = Math.max(1, link.width ?? 1);
+          const live = linkActivity?.(targetId) ?? null;
+          const style = LINK_STYLES[live ?? "default"];
           return (
             <g key={i}>
               <path
@@ -55,12 +71,15 @@ export function SankeyLinks({ links, diagramWidth, highlightedEdgeKeys, onHover,
                 onMouseEnter={() => onHover(targetId)}
                 onMouseLeave={() => onHover(null)}
                 onClick={() => onSelect(targetId)}
-              />
+              >
+                {live && <title>{`${targetId}: ${live === "active" ? "receiving messages now" : "no messages arriving"}`}</title>}
+              </path>
               <path
+                className={live ? `sankey-link sankey-link--${live}` : "sankey-link"}
                 d={d}
                 fill="none"
-                stroke={isHighlighted ? `url(#${FLOW_GRADIENT_ID})` : DIAGRAM_COLORS.flow}
-                strokeOpacity={isHighlighted ? 0.75 : 0.2}
+                stroke={isHighlighted ? `url(#${FLOW_GRADIENT_ID})` : style.stroke}
+                strokeOpacity={isHighlighted ? 0.75 : highlightedEdgeKeys ? style.opacityBehindHighlight : style.opacity}
                 strokeWidth={strokeWidth}
                 style={{ pointerEvents: "none" }}
               />
