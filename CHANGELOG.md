@@ -98,6 +98,8 @@ All notable changes to this project are documented here
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
 
 ### Fixed
+- The empty diagram no longer points at a source file that does not exist
+  (`backend/src/semp/queries.ts`); it tells the user to refresh once an endpoint subscribes.
 - Dependency advisories that failed the `npm audit` gate: `vitest` / `@vitest/coverage-v8`
   raised to `^4.1.12`; lockfile refresh for `body-parser` 2.4.0, `undici` 8.12.3, `qs` 6.17.1
   and `ip-address` 10.7.5.

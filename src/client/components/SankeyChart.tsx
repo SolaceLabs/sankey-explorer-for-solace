@@ -115,9 +115,9 @@ export function SankeyChart({
   if (edges.length === 0) {
     return (
       <div className="sankey-empty">
-        No topic subscriptions found - either no endpoint has any
-        subscriptions, or the SEMP reply structure doesn't match the
-        parser (see backend/src/semp/queries.ts).
+        No topic subscriptions found in the connected message VPNs. Once a
+        queue, topic endpoint or client subscribes to a topic, refresh to see
+        its flow here.
       </div>
     );
   }
