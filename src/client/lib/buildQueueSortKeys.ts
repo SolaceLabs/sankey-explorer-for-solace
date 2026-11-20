@@ -1,4 +1,5 @@
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
+import { adjacencyOf, nodeIdsOf } from "./flowGraph";
 
 /**
  * For every node, computes a sort key derived from the endpoint(s) it
@@ -18,15 +19,7 @@ export function buildQueueSortKeys(
   edges: SankeyEdge[],
   endpointKey: (endpointId: string) => string = (id) => id,
 ): Map<string, string> {
-  const outgoing = new Map<string, string[]>();
-  const nodeIds = new Set<string>();
-  for (const edge of edges) {
-    nodeIds.add(edge.source);
-    nodeIds.add(edge.target);
-    if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
-    outgoing.get(edge.source)!.push(edge.target);
-  }
-
+  const outgoing = adjacencyOf(edges, "outgoing");
   const memo = new Map<string, string>();
 
   function keyFor(id: string): string {
@@ -41,15 +34,12 @@ export function buildQueueSortKeys(
       return key;
     }
 
-    let smallest: string | null = null;
-    for (const child of children) {
-      const childKey = keyFor(child);
-      if (smallest === null || childKey < smallest) smallest = childKey;
-    }
-    memo.set(id, smallest!);
-    return smallest!;
+    // children is non-empty here, so the reduce always has a first value.
+    const smallest = children.map(keyFor).reduce((a, b) => (b < a ? b : a));
+    memo.set(id, smallest);
+    return smallest;
   }
 
-  for (const id of nodeIds) keyFor(id);
+  for (const id of nodeIdsOf(edges)) keyFor(id);
   return memo;
 }

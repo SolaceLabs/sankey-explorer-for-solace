@@ -1,4 +1,5 @@
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
+import { appendTo, nodeIdsOf } from "./flowGraph";
 
 /**
  * d3-sankey requires an acyclic graph (see the comment in sankeyLayout.ts).
@@ -13,26 +14,20 @@ export function removeCycles(edges: SankeyEdge[]): {
   acyclicEdges: SankeyEdge[];
   removedEdges: SankeyEdge[];
 } {
-  const nodeIds = new Set<string>();
-  for (const e of edges) {
-    nodeIds.add(e.source);
-    nodeIds.add(e.target);
-  }
-
+  const nodeIds = nodeIdsOf(edges);
   const outgoing = new Map<string, SankeyEdge[]>();
   const inDegree = new Map<string, number>();
   for (const id of nodeIds) inDegree.set(id, 0);
   for (const e of edges) {
-    if (!outgoing.has(e.source)) outgoing.set(e.source, []);
-    outgoing.get(e.source)!.push(e);
+    appendTo(outgoing, e.source, e);
     inDegree.set(e.target, (inDegree.get(e.target) ?? 0) + 1);
   }
 
-  const queue: string[] = [...nodeIds].filter((id) => inDegree.get(id) === 0);
+  const queue = nodeIds.filter((id) => inDegree.get(id) === 0);
   const acyclicEdges: SankeyEdge[] = [];
 
-  while (queue.length > 0) {
-    const id = queue.shift()!;
+  // for...of over an array also visits elements pushed during the loop.
+  for (const id of queue) {
     for (const edge of outgoing.get(id) ?? []) {
       acyclicEdges.push(edge);
       const remaining = (inDegree.get(edge.target) ?? 0) - 1;

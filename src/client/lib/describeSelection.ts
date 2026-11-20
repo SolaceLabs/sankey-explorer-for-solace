@@ -2,6 +2,7 @@ import type { SankeyEdge } from "../../shared/toSankeyEdges";
 import { subscriptionCovers } from "../../shared/subscriptionCovers";
 import { endpointDisplayName } from "./endpointDisplayName";
 import { isEndpointNode } from "./nodeKind";
+import { adjacencyOf, appendTo, reachableFrom } from "./flowGraph";
 
 /**
  * How a selected topic reaches an endpoint:
@@ -34,42 +35,16 @@ export type SelectionDetails =
     }
   | { kind: "endpoint"; id: string; subscriptions: string[] };
 
-interface EdgeIndex {
-  outgoing: Map<string, string[]>;
-  /** Endpoint id -> its declared (non-implied) subscription strings. */
-  declared: Map<string, string[]>;
-}
-
-const pushTo = (map: Map<string, string[]>, key: string, value: string): void => {
-  const list = map.get(key);
-  if (list) list.push(value);
-  else map.set(key, [value]);
-};
-
-const indexEdges = (edges: SankeyEdge[]): EdgeIndex => {
-  const outgoing = new Map<string, string[]>();
+/** Endpoint id -> its declared (non-implied) subscription strings. */
+const declaredSubscriptions = (edges: SankeyEdge[]): Map<string, string[]> => {
   const declared = new Map<string, string[]>();
   for (const edge of edges) {
-    pushTo(outgoing, edge.source, edge.target);
     // The last hop into an endpoint carries the full subscription string
     // as its source (see explodeTopicHierarchy); implied edges are
     // coverage, not something the endpoint declared.
-    if (isEndpointNode(edge.target) && !edge.implied) pushTo(declared, edge.target, edge.source);
+    if (isEndpointNode(edge.target) && !edge.implied) appendTo(declared, edge.target, edge.source);
   }
-  return { outgoing, declared };
-};
-
-const reachableFrom = (start: string, outgoing: Map<string, string[]>): Set<string> => {
-  const seen = new Set([start]);
-  const queue = [start];
-  for (let current = queue.shift(); current !== undefined; current = queue.shift()) {
-    for (const next of outgoing.get(current) ?? []) {
-      if (seen.has(next)) continue;
-      seen.add(next);
-      queue.push(next);
-    }
-  }
-  return seen;
+  return declared;
 };
 
 const describeEndpoint = (
@@ -102,7 +77,8 @@ export function describeSelection(edges: SankeyEdge[], nodeId: string): Selectio
   const exists = edges.some((e) => e.source === nodeId || e.target === nodeId);
   if (!exists) return null;
 
-  const { outgoing, declared } = indexEdges(edges);
+  const outgoing = adjacencyOf(edges, "outgoing");
+  const declared = declaredSubscriptions(edges);
   if (isEndpointNode(nodeId)) {
     return { kind: "endpoint", id: nodeId, subscriptions: [...(declared.get(nodeId) ?? [])].sort() };
   }

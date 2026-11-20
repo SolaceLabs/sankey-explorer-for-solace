@@ -7,6 +7,7 @@ import { downloadSvg } from "../lib/exportSvg";
 import { filterToRelevantSubgraph } from "../lib/filterToRelevantSubgraph";
 import { describeSelection } from "../lib/describeSelection";
 import { columnHeadings } from "../lib/columnHeadings";
+import { nodeIdsOf } from "../lib/flowGraph";
 import type { EndpointBrokerColors } from "../lib/buildEndpointBrokerColors";
 import { endpointTypeOf, isEndpointNode } from "../lib/nodeKind";
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
@@ -70,10 +71,6 @@ const linkPath = sankeyLinkHorizontal();
 // (Literal mode has no implied edges, so this changes nothing there.)
 const FLOW_OPTIONS = { includeImpliedAncestors: true } as const;
 
-const uniqueNodeIds = (edges: SankeyEdge[]): string[] => [
-  ...new Set(edges.flatMap((e) => [e.source, e.target])),
-];
-
 interface Selection {
   nodeId: string;
   /** "Show only this": the diagram is reduced to the node's flow. */
@@ -136,7 +133,7 @@ export function SankeyChart({
     () => buildDisplayEdges(edges, { viewMode, showDirectSubscribers }),
     [edges, viewMode, showDirectSubscribers],
   );
-  const allNodeIds = useMemo(() => uniqueNodeIds(explodedEdges), [explodedEdges]);
+  const allNodeIds = useMemo(() => nodeIdsOf(explodedEdges), [explodedEdges]);
 
   const selectedId = selected?.nodeId ?? null;
   const isFocused = Boolean(selected?.focused);
@@ -150,7 +147,7 @@ export function SankeyChart({
   );
 
   const diagramWidth = Math.max(width, MIN_DIAGRAM_WIDTH);
-  const height = Math.max(420, uniqueNodeIds(displayEdges).length * 24);
+  const height = Math.max(420, nodeIdsOf(displayEdges).length * 24);
   const showVpnHost = Boolean(endpointBrokerColors && endpointBrokerColors.brokerCount > 1);
   const graph = useMemo(
     () =>
@@ -174,7 +171,7 @@ export function SankeyChart({
     const relevant = filterToRelevantSubgraph(displayEdges, highlightId, FLOW_OPTIONS);
     return {
       edgeKeys: new Set(relevant.map((e) => edgeKey(e.source, e.target))),
-      nodeIds: new Set([highlightId, ...uniqueNodeIds(relevant)]),
+      nodeIds: new Set([highlightId, ...nodeIdsOf(relevant)]),
     };
   }, [displayEdges, highlightId]);
 

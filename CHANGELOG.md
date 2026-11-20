@@ -43,6 +43,10 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- Graph walking lives in one tested module (`lib/flowGraph.ts`: `nodeIdsOf`, `adjacencyOf`,
+  `reachableFrom`, `appendTo`) instead of four hand-rolled copies in `filterToRelevantSubgraph`,
+  `describeSelection`, `buildQueueSortKeys` and `removeCycles` (plus three node-id collectors);
+  this also removes their non-null assertions.
 - Endpoint node ids are produced and read from one table (`shared/endpointNodeId.ts`):
   `toSankeyEdges` builds "Queue: X" style ids from it, and the client's type checks, display
   names, direct-subscriber filter and colors read the type back from it instead of repeating
