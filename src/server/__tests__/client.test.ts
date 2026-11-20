@@ -96,6 +96,16 @@ describe("SempV2Client.getVpnCollection", () => {
     );
   });
 
+  it("appends SEMP's select parameter with literal commas between the names", async () => {
+    const fetchMock = vi.mocked(fetch).mockResolvedValue(jsonResponse({ data: [] }));
+
+    await client.getVpnCollection("default", "/queues", ["queueName", "rxMsgRate"]);
+
+    expect(fetchMock.mock.calls[0]![0]).toBe(
+      "http://localhost:8080/SEMP/v2/monitor/msgVpns/default/queues?count=100&select=queueName,rxMsgRate",
+    );
+  });
+
   it("returns the combined data from a single page", async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse({ data: [{ queueName: "q1" }] }));
 

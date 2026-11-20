@@ -6,6 +6,13 @@ All notable changes to this project are documented here
 ## [Unreleased]
 
 ### Added
+- Live SEMP v2 metrics API: `GET /api/metrics` returns one telemetry sample (current and
+  1-minute-average message rates, spool usage and quota, unacked messages, ingress/egress
+  state) for every queue, topic endpoint and client of every connected Message VPN. Three
+  `select`-limited list calls per VPN; one failing broker still yields a partial 200 like
+  `/api/endpoints`. `GET /api/metrics/consumers` lists the consumer flows (`txFlows`) of one
+  queue or topic endpoint on demand. Missing or malformed SEMP fields come back as `null`,
+  never as a fake `0`.
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
 - Dependabot auto-merge workflow: GitHub's native auto-merge (squash) is enabled for patch and
@@ -43,6 +50,8 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- `SempV2Client.getVpnCollection` accepts an optional SEMP `select` attribute list; the
+  per-broker error isolation of `/api/endpoints` moved into a shared `queryAcrossConnections`.
 - `ConnectScreen` is split (296 to 155 lines): the form in `ConnectForm`, export/import in
   `ConfigFileActions`, and connecting several entries plus remembering their credentials in
   the tested `lib/brokerConnections.ts` (`connectEach`, `withNewConnectionConfig`).

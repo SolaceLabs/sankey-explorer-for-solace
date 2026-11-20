@@ -135,9 +135,20 @@ export class SempV2Client {
    * already have its own segments URL-encoded (object names can contain
    * characters that need escaping - see encodeURIComponent calls in
    * queries.ts).
+   *
+   * `select` limits each object to the named attributes (SEMP v2's own
+   * `select` query parameter), which keeps frequent metric polls small.
+   * Every name must exist on the object type: SEMP rejects the whole
+   * request (HTTP 400) if one matches no attribute, so only pass names
+   * that are part of the monitor API's base version.
    */
-  async getVpnCollection<T>(vpn: string, path: string): Promise<T[]> {
-    const url = `${this.monitorBase()}/msgVpns/${encodeURIComponent(vpn)}${path}?count=100`;
+  async getVpnCollection<T>(vpn: string, path: string, select?: readonly string[]): Promise<T[]> {
+    // 100 is the documented per-page maximum for every collection used here.
+    let url = `${this.monitorBase()}/msgVpns/${encodeURIComponent(vpn)}${path}?count=100`;
+    if (select && select.length > 0) {
+      // Commas stay literal: they separate the names in SEMP's syntax.
+      url += `&select=${select.map(encodeURIComponent).join(",")}`;
+    }
     return this.getCollection<T>(url);
   }
 
