@@ -2,6 +2,14 @@ import type { ApiError, BrokerConnectionStatus, EndpointsResponse, SessionInfo }
 
 export class ApiRequestError extends Error {}
 
+/**
+ * What to show the user for a failed call: the server's own message for an
+ * API error, otherwise the caller's fallback (network failure, bug), since
+ * a raw TypeError says nothing useful.
+ */
+export const apiErrorMessage = (err: unknown, fallback: string): string =>
+  err instanceof ApiRequestError ? err.message : fallback;
+
 async function request<T>(
   path: string,
   options: RequestInit = {},

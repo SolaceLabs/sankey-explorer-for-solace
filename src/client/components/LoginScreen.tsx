@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, ApiRequestError } from "../api/client";
+import { api, apiErrorMessage } from "../api/client";
 
 interface LoginScreenProps {
   onLoggedIn: () => void;
@@ -19,7 +19,7 @@ export function LoginScreen({ onLoggedIn }: LoginScreenProps) {
       await api.login(username, password);
       onLoggedIn();
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Login failed");
+      setError(apiErrorMessage(err, "Login failed"));
     } finally {
       setSubmitting(false);
     }

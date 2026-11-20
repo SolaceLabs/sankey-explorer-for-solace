@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, ApiRequestError } from "./client";
+import { api, ApiRequestError, apiErrorMessage } from "./client";
 
 function jsonResponse(body: unknown, ok = true, statusText = "OK"): Response {
   return {
@@ -113,5 +113,16 @@ describe("api.getEndpoints", () => {
     const result = await api.getEndpoints();
 
     expect(result).toEqual({ endpoints: [{ name: "orders-q" }], errors: [] });
+  });
+});
+
+describe("apiErrorMessage", () => {
+  it("passes the server's message through for API errors", () => {
+    expect(apiErrorMessage(new ApiRequestError("Invalid credentials"), "Login failed")).toBe("Invalid credentials");
+  });
+
+  it("falls back for anything else", () => {
+    expect(apiErrorMessage(new TypeError("Failed to fetch"), "Login failed")).toBe("Login failed");
+    expect(apiErrorMessage("boom", "Login failed")).toBe("Login failed");
   });
 });

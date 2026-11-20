@@ -43,6 +43,9 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- `apiErrorMessage(err, fallback)` in `api/client.ts` replaces six inline
+  `err instanceof ApiRequestError ? err.message : ...` checks in `App`, `ConnectScreen` and
+  `LoginScreen`.
 - One tested `countLabel` ("1 endpoint", "7 endpoints") replaces the two identical `plural`
   helpers in `DiagramToolbar` and `SelectionPanel`.
 - `SankeyChart` is split by concern (300 to 200 lines): the flows and their gradient render in

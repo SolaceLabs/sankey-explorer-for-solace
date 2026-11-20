@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { api, ApiRequestError } from "../api/client";
+import { api, apiErrorMessage } from "../api/client";
 import { parseBrokerConfig, serializeBrokerConfig } from "../lib/brokerConfig";
 import type { BrokerConfigEntry } from "../lib/brokerConfig";
 import type { BrokerConnectionStatus } from "../types";
@@ -81,7 +81,7 @@ export function ConnectScreen({
       setPassword("");
       setLabel("");
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Connection failed");
+      setError(apiErrorMessage(err, "Connection failed"));
     } finally {
       setSubmitting(false);
     }
@@ -142,7 +142,7 @@ export function ConnectScreen({
           }
         } catch (err) {
           failed.push(
-            `${entry.label || entry.vpn}: ${err instanceof ApiRequestError ? err.message : "Connection failed"}`,
+            `${entry.label || entry.vpn}: ${apiErrorMessage(err, "Connection failed")}`,
           );
         }
       }

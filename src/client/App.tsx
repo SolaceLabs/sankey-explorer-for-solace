@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiRequestError } from "./api/client";
+import { api, apiErrorMessage } from "./api/client";
 import { LoginScreen } from "./components/LoginScreen";
 import { ConnectScreen } from "./components/ConnectScreen";
 import { SankeyChart } from "./components/SankeyChart";
@@ -40,7 +40,7 @@ function App() {
     } catch (err) {
       setView({
         kind: "error",
-        message: err instanceof ApiRequestError ? err.message : "Failed to load endpoints",
+        message: apiErrorMessage(err, "Failed to load endpoints"),
       });
     }
   }, []);
@@ -59,7 +59,7 @@ function App() {
     } catch (err) {
       setView({
         kind: "error",
-        message: err instanceof ApiRequestError ? err.message : "Could not reach the server",
+        message: apiErrorMessage(err, "Could not reach the server"),
       });
     }
   }, [loadEndpoints]);
@@ -85,7 +85,7 @@ function App() {
       setView({ kind: "ready", endpoints, errors });
     } catch (err) {
       setRefreshError(
-        err instanceof ApiRequestError ? err.message : "Refresh failed",
+        apiErrorMessage(err, "Refresh failed"),
       );
     } finally {
       setIsRefreshing(false);
