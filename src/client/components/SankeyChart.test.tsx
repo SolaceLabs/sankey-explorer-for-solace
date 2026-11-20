@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SankeyChart } from "./SankeyChart";
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
@@ -7,6 +7,13 @@ import type { SankeyEdge } from "../../shared/toSankeyEdges";
 const basicEdges: SankeyEdge[] = [
   { source: "acme/sales", target: "Queue: orders-q", value: 1 },
 ];
+
+const wildcardEdges: SankeyEdge[] = [
+  { source: "acme/sales/>", target: "Queue: all-sales-q", value: 1 },
+  { source: "acme/sales/orders", target: "Topic Endpoint: te-orders", value: 1 },
+];
+
+const panel = () => screen.getByRole("complementary", { name: "Selection details" });
 
 describe("SankeyChart - empty state", () => {
   it("shows a helpful message instead of an empty diagram when there are no edges", () => {
@@ -22,29 +29,72 @@ describe("SankeyChart - labels", () => {
     expect(screen.queryByText("acme/sales")).not.toBeInTheDocument();
   });
 
-  it("shows the bare endpoint name without the 'Queue: ' prefix, plus a 'Queue' type sub-label", () => {
+  it("shows the bare endpoint name next to a Q badge named 'Queue'", () => {
     render(<SankeyChart edges={basicEdges} />);
     expect(screen.getByText("orders-q")).toBeInTheDocument();
     expect(screen.queryByText("Queue: orders-q")).not.toBeInTheDocument();
-    expect(screen.getByText("Queue")).toBeInTheDocument();
+    expect(screen.getByText("Q")).toBeInTheDocument();
+    expect(screen.getByText("Queue", { selector: "title" })).toBeInTheDocument();
   });
 
-  it("renders a direct subscriber node with its own type sub-label, distinct from a queue", () => {
+  it("gives topic endpoints and direct subscribers their own badges", () => {
     render(
       <SankeyChart
-        edges={[{ source: "acme/sales", target: "Direct Subscriber: my-app-1", value: 1 }]}
+        edges={[
+          { source: "acme/sales", target: "Topic Endpoint: te-orders", value: 1 },
+          { source: "acme/sales", target: "Direct Subscriber: my-app-1", value: 1 },
+        ]}
       />,
     );
-    expect(screen.getByText("my-app-1")).toBeInTheDocument();
-    expect(screen.getByText("Direct Subscriber")).toBeInTheDocument();
+    expect(screen.getByText("TE")).toBeInTheDocument();
+    expect(screen.getByText("Topic Endpoint", { selector: "title" })).toBeInTheDocument();
+    expect(screen.getByText("DS")).toBeInTheDocument();
+    expect(screen.getByText("Direct Subscriber", { selector: "title" })).toBeInTheDocument();
   });
 
-  it("shows the owner sub-label when provided", () => {
+  it("colors each badge by type: queue green, topic endpoint light blue, direct subscriber outlined", () => {
+    const { container } = render(
+      <SankeyChart
+        edges={[
+          { source: "acme/sales", target: "Queue: orders-q", value: 1 },
+          { source: "acme/sales", target: "Topic Endpoint: te-orders", value: 1 },
+          { source: "acme/sales", target: "Direct Subscriber: my-app-1", value: 1 },
+        ]}
+      />,
+    );
+    const look = (code: string) => {
+      const badge = Array.from(container.querySelectorAll("g.sankey-badge")).find(
+        (g) => g.querySelector("text")?.textContent === code,
+      )!;
+      const rect = badge.querySelector("rect")!;
+      return [rect.getAttribute("fill"), rect.getAttribute("stroke"), badge.querySelector("text")!.getAttribute("fill")];
+    };
+    expect(look("Q")).toEqual(["#00C895", "none", "#03213B"]);
+    expect(look("TE")).toEqual(["#C2F7FF", "none", "#03213B"]);
+    expect(look("DS")).toEqual(["none", "#FFFFFF", "#FFFFFF"]);
+  });
+
+  it("centers the badge vertically on the whole endpoint entry, not on the name line", () => {
     render(
       <SankeyChart
         edges={basicEdges}
         endpointOwners={new Map([["Queue: orders-q", "app-svc-orders"]])}
+        endpointBrokerColors={{ colorByEndpointLabel: new Map(), brokerCount: 2 }}
+        endpointVpnHost={new Map([["Queue: orders-q", "default at localhost:8080"]])}
       />,
+    );
+    const node = screen.getByText("orders-q").closest("g.sankey-node")!;
+    const bar = node.querySelector("rect")!;
+    const badge = node.querySelector("g.sankey-badge rect")!;
+    const center = (el: Element) => Number(el.getAttribute("y")) + Number(el.getAttribute("height")) / 2;
+    // Name + two sub-lines: the entry's middle is the bar's middle.
+    expect(center(badge)).toBeCloseTo(center(bar), 5);
+    expect(Number(screen.getByText("orders-q").getAttribute("y"))).toBeLessThan(center(badge));
+  });
+
+  it("shows the owner sub-label when provided", () => {
+    render(
+      <SankeyChart edges={basicEdges} endpointOwners={new Map([["Queue: orders-q", "app-svc-orders"]])} />,
     );
     expect(screen.getByText("app-svc-orders")).toBeInTheDocument();
   });
@@ -70,48 +120,50 @@ describe("SankeyChart - labels", () => {
     );
     expect(screen.getByText("default at localhost:8080")).toBeInTheDocument();
   });
+
+  it("labels the topic columns and the endpoint column", () => {
+    render(<SankeyChart edges={basicEdges} />);
+    expect(screen.getByText("Level 1")).toBeInTheDocument();
+    expect(screen.getByText("Level 2")).toBeInTheDocument();
+    expect(screen.getByText("Endpoints")).toBeInTheDocument();
+  });
 });
 
-describe("SankeyChart - sort control", () => {
-  it("offers all five sort modes", () => {
+describe("SankeyChart - toolbar", () => {
+  it("offers all five sort modes, 'Fewest crossings' first and selected", () => {
     render(<SankeyChart edges={basicEdges} />);
-    const select = screen.getByLabelText("Sort by") as HTMLSelectElement;
-    const optionLabels = Array.from(select.options).map((o) => o.textContent);
-    expect(optionLabels).toEqual([
+    const select = screen.getByLabelText("Sort") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+      "Fewest crossings",
       "Topic name",
       "Endpoint",
       "Owner",
       "Message VPN",
-      "Crossing minimized",
     ]);
+    expect(select.value).toBe("crossing");
   });
 
-  it("switching sort mode does not crash and keeps the diagram rendered", async () => {
+  it("switching sort mode keeps the diagram rendered", async () => {
     const user = userEvent.setup();
     render(<SankeyChart edges={basicEdges} />);
-
-    await user.selectOptions(screen.getByLabelText("Sort by"), "Crossing minimized");
-
+    await user.selectOptions(screen.getByLabelText("Sort"), "Topic name");
     expect(screen.getByText("orders-q")).toBeInTheDocument();
+  });
+
+  it("counts topics, endpoints and endpoints without subscriptions", () => {
+    render(<SankeyChart edges={basicEdges} unsubscribedEndpoints={["legacy-q"]} />);
+    expect(screen.getByText("2 topics, 1 endpoint")).toBeInTheDocument();
+    expect(screen.getByText("1 without subscriptions")).toHaveAttribute("title", "legacy-q");
+  });
+
+  it("hides the 'without subscriptions' count when every endpoint has one", () => {
+    render(<SankeyChart edges={basicEdges} />);
+    expect(screen.queryByText(/without subscriptions/)).not.toBeInTheDocument();
   });
 });
 
-describe("SankeyChart - click to filter", () => {
-  it("clicking a node shows 'Back to overview', clicking that hides it again", async () => {
-    const user = userEvent.setup();
-    render(<SankeyChart edges={basicEdges} />);
-
-    expect(screen.queryByRole("button", { name: "Back to overview" })).not.toBeInTheDocument();
-
-    await user.click(screen.getByText("orders-q"));
-    const backButton = await screen.findByRole("button", { name: "Back to overview" });
-    expect(backButton).toBeInTheDocument();
-
-    await user.click(backButton);
-    expect(screen.queryByRole("button", { name: "Back to overview" })).not.toBeInTheDocument();
-  });
-
-  it("clicking a queue keeps that queue's own subscription chain visible", async () => {
+describe("SankeyChart - selecting a node", () => {
+  it("opens the detail panel without filtering the diagram", async () => {
     const edges: SankeyEdge[] = [
       { source: "acme/sales", target: "Queue: orders-q", value: 1 },
       { source: "acme/support", target: "Queue: tickets-q", value: 1 },
@@ -121,71 +173,330 @@ describe("SankeyChart - click to filter", () => {
 
     await user.click(screen.getByText("orders-q"));
 
-    expect(screen.getByText("orders-q")).toBeInTheDocument();
-    expect(screen.queryByText("tickets-q")).not.toBeInTheDocument();
+    expect(within(panel()).getByText("Selected endpoint")).toBeInTheDocument();
+    expect(within(panel()).getByText("acme/sales")).toBeInTheDocument();
+    // Selection highlights, it does not filter: the unrelated queue stays.
+    expect(screen.getByText("tickets-q")).toBeInTheDocument();
   });
-});
 
-describe("SankeyChart - wildcard subscription coverage", () => {
-  it("shows a broader wildcard subscriber when filtering down to a more specific, separately-subscribed topic", async () => {
+  it("'Show only this' filters to the selected flow, 'Back to overview' restores it", async () => {
     const edges: SankeyEdge[] = [
-      { source: "acme/sales/>", target: "Queue: all-sales-q", value: 1 },
-      { source: "acme/sales/orders", target: "Topic Endpoint: te-orders", value: 1 },
+      { source: "acme/sales", target: "Queue: orders-q", value: 1 },
+      { source: "acme/support", target: "Queue: tickets-q", value: 1 },
     ];
     const user = userEvent.setup();
     render(<SankeyChart edges={edges} />);
 
-    // Before filtering, both endpoints are already visible (the fan-out
-    // from "acme/sales/orders" now includes the queue too, on top of its
-    // own directly-subscribed topic-endpoint).
-    expect(screen.getByText("all-sales-q")).toBeInTheDocument();
-    expect(screen.getByText("te-orders")).toBeInTheDocument();
+    await user.click(screen.getByText("orders-q"));
+    await user.click(within(panel()).getByRole("button", { name: "Show only this" }));
+    expect(screen.queryByText("tickets-q")).not.toBeInTheDocument();
+    expect(within(panel()).getByRole("button", { name: "Show all flows" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Back to overview" }));
+    expect(screen.getByText("tickets-q")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back to overview" })).not.toBeInTheDocument();
+  });
+
+  it("closing the panel clears the selection", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={basicEdges} />);
+
+    await user.click(screen.getByText("orders-q"));
+    await user.click(screen.getByRole("button", { name: "Close details" }));
+
+    expect(screen.queryByRole("complementary", { name: "Selection details" })).not.toBeInTheDocument();
+  });
+
+  it("says 'receive topics from this branch' for a topic level with more levels below", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+
+    await user.click(screen.getByText("sales"));
+
+    expect(within(panel()).getByText(/receive topics from this branch/)).toHaveTextContent(
+      "2 endpoints receive topics from this branch",
+    );
+  });
+
+  it("uses the singular for one endpoint on a branch", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={basicEdges} />);
+
+    await user.click(screen.getByText("acme"));
+
+    expect(within(panel()).getByText(/from this branch/)).toHaveTextContent(
+      "1 endpoint receives topics from this branch",
+    );
+  });
+
+  it("keeps 'Messages published here reach' for a full topic with nothing below", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
 
     await user.click(screen.getByText("orders"));
 
-    // Filtering down to the specific topic must still show the queue that
-    // only reaches it via its broader "acme/sales/>" wildcard - that's the
-    // whole point of the fix.
-    expect(screen.getByText("all-sales-q")).toBeInTheDocument();
-    expect(screen.getByText("te-orders")).toBeInTheDocument();
+    expect(within(panel()).getByText(/Messages published here reach/)).toHaveTextContent(
+      "Messages published here reach 2 endpoints.",
+    );
+  });
+
+  it("marks an endpoint reached only through a wider wildcard as 'Wildcard'", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+
+    await user.click(screen.getByText("orders"));
+
+    const items = within(panel()).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(within(items[0]!).getByText("te-orders")).toBeInTheDocument();
+    expect(within(items[0]!).queryByText("Wildcard")).not.toBeInTheDocument();
+    expect(within(items[1]!).getByText("all-sales-q")).toBeInTheDocument();
+    expect(within(items[1]!).getByText("Wildcard")).toBeInTheDocument();
+    expect(within(items[1]!).getByText("acme/sales/>")).toBeInTheDocument();
+  });
+
+  it("copies the selected topic to the clipboard", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    render(<SankeyChart edges={wildcardEdges} />);
+
+    await user.click(screen.getByText("orders"));
+    await user.click(within(panel()).getByRole("button", { name: "Copy topic" }));
+
+    expect(writeText).toHaveBeenCalledWith("acme/sales/orders");
+    expect(within(panel()).getByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
+});
+
+describe("SankeyChart - flow highlighting", () => {
+  const strokes = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('path[style*="pointer-events: none"]')).map((p) => [
+      p.getAttribute("stroke"),
+      p.getAttribute("stroke-opacity"),
+    ]);
+
+  it("draws every flow flat, without gradient, while nothing is hovered or selected", () => {
+    const { container } = render(<SankeyChart edges={wildcardEdges} />);
+    for (const [stroke, opacity] of strokes(container)) {
+      expect(stroke).toBe("#C2F7FF");
+      expect(opacity).toBe("0.2");
+    }
+  });
+
+  it("puts the one diagram-wide gradient on the selected flow and leaves the others unchanged", async () => {
+    const edges: SankeyEdge[] = [
+      { source: "acme/sales", target: "Queue: orders-q", value: 1 },
+      { source: "acme/support", target: "Queue: tickets-q", value: 1 },
+    ];
+    const user = userEvent.setup();
+    const { container } = render(<SankeyChart edges={edges} />);
+
+    await user.click(screen.getByText("orders-q"));
+
+    const result = strokes(container);
+    expect(result).toContainEqual(["url(#sankey-flow-gradient)", "0.75"]);
+    expect(result).toContainEqual(["#C2F7FF", "0.2"]);
+    const gradient = container.querySelector("#sankey-flow-gradient");
+    expect(gradient).toHaveAttribute("gradientUnits", "userSpaceOnUse");
+    expect(Array.from(gradient!.querySelectorAll("stop")).map((s) => s.getAttribute("stop-color"))).toEqual([
+      "#009193",
+      "#093B5F",
+    ]);
+  });
+
+  it("dims nodes outside a clicked selection once the pointer has left it", async () => {
+    const edges: SankeyEdge[] = [
+      { source: "acme/sales", target: "Queue: orders-q", value: 1 },
+      { source: "acme/support", target: "Queue: tickets-q", value: 1 },
+    ];
+    const user = userEvent.setup();
+    render(<SankeyChart edges={edges} />);
+    const svg = screen.getByRole("img", { name: "Topic to endpoint Sankey diagram" });
+
+    await user.click(within(svg).getByText("orders-q"));
+    // Still hovered right after the click - hovering never dims.
+    expect(svg.querySelectorAll("g.sankey-node[opacity]")).toHaveLength(0);
+    await user.unhover(within(svg).getByText("orders-q"));
+
+    expect(within(svg).getByText("tickets-q").closest("g.sankey-node")).toHaveAttribute("opacity", "0.35");
+    expect(within(svg).getByText("orders-q").closest("g.sankey-node")).not.toHaveAttribute("opacity");
+  });
+});
+
+describe("SankeyChart - hover", () => {
+  it("does not dim anything while only hovering", async () => {
+    const edges: SankeyEdge[] = [
+      { source: "acme/sales", target: "Queue: orders-q", value: 1 },
+      { source: "acme/support", target: "Queue: tickets-q", value: 1 },
+    ];
+    const user = userEvent.setup();
+    const { container } = render(<SankeyChart edges={edges} />);
+    const svg = screen.getByRole("img", { name: "Topic to endpoint Sankey diagram" });
+
+    await user.hover(within(svg).getByText("orders-q"));
+
+    expect(container.querySelectorAll('path[stroke="url(#sankey-flow-gradient)"]').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll("g.sankey-node[opacity]")).toHaveLength(0);
+  });
+
+  it("in data flow mode, hovering a wildcard queue highlights every topic it receives, covered ones included", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<SankeyChart edges={wildcardEdges} />);
+    const svg = screen.getByRole("img", { name: "Topic to endpoint Sankey diagram" });
+
+    await user.hover(within(svg).getByText("all-sales-q"));
+
+    // acme -> acme/sales -> acme/sales/> -> queue (declared) plus
+    // acme/sales -> acme/sales/orders -> queue (covered by the wildcard);
+    // only the topic endpoint's own link stays unhighlighted.
+    const gradientLinks = container.querySelectorAll('path[stroke="url(#sankey-flow-gradient)"]');
+    expect(gradientLinks).toHaveLength(5);
+  });
+
+  it("in literal mode, hovering the same queue highlights only its declared subscription", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<SankeyChart edges={wildcardEdges} />);
+    await user.click(screen.getByRole("button", { name: "Literal subscriptions" }));
+    const svg = screen.getByRole("img", { name: "Topic to endpoint Sankey diagram" });
+
+    await user.hover(within(svg).getByText("all-sales-q"));
+
+    expect(container.querySelectorAll('path[stroke="url(#sankey-flow-gradient)"]')).toHaveLength(3);
+  });
+});
+
+describe("SankeyChart - search", () => {
+  it("selects the matching node on Enter", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+
+    await user.type(screen.getByRole("combobox", { name: "Find topic or endpoint" }), "acme/sales/orders{Enter}");
+
+    expect(within(panel()).getByText("Selected topic")).toBeInTheDocument();
+    expect(within(panel()).getByText("acme/sales/orders", { selector: ".selection-panel-id" })).toBeInTheDocument();
+    // The panel now shows the selection; the search is cleared and let go.
+    const input = screen.getByRole("combobox", { name: "Find topic or endpoint" });
+    expect(input).toHaveValue("");
+    expect(input).not.toHaveFocus();
+  });
+
+  it("shows matching suggestions in a list below the field", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+    const input = screen.getByRole("combobox", { name: "Find topic or endpoint" });
+
+    await user.type(input, "sales");
+
+    const list = screen.getByRole("listbox", { name: "Suggestions" });
+    expect(input).toHaveAttribute("aria-expanded", "true");
+    expect(within(list).getAllByRole("option").map((o) => o.textContent)).toContain("acme/sales/orders");
+  });
+
+  it("selects a suggestion with the arrow keys and Enter", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+    const input = screen.getByRole("combobox", { name: "Find topic or endpoint" });
+
+    await user.type(input, "te-ord");
+    await user.keyboard("{ArrowDown}");
+    const option = screen.getByRole("option", { name: /te-orders/ });
+    expect(option).toHaveAttribute("aria-selected", "true");
+    expect(input).toHaveAttribute("aria-activedescendant", option.id);
+    await user.keyboard("{Enter}");
+
+    expect(within(panel()).getByText("Selected endpoint")).toBeInTheDocument();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("selects a suggestion by clicking it", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+
+    await user.type(screen.getByRole("combobox", { name: "Find topic or endpoint" }), "all-sales");
+    await user.click(screen.getByRole("option", { name: /all-sales-q/ }));
+
+    expect(within(panel()).getByText("Selected endpoint")).toBeInTheDocument();
+    const input = screen.getByRole("combobox", { name: "Find topic or endpoint" });
+    expect(input).toHaveValue("");
+    expect(input).not.toHaveFocus();
+  });
+
+  it("closes the suggestions on Escape", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+    const input = screen.getByRole("combobox", { name: "Find topic or endpoint" });
+
+    await user.type(input, "sales");
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(input).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps the typed text after a miss and tells only screen readers", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+    const input = screen.getByRole("combobox", { name: "Find topic or endpoint" });
+
+    await user.type(input, "billing{Enter}");
+
+    const status = screen.getByRole("status");
+    expect(status).toHaveTextContent('No topic or endpoint matches "billing"');
+    expect(status).toHaveClass("visually-hidden");
+    expect(input).toHaveValue("billing");
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("focuses on Ctrl+K (non-Mac test environment)", () => {
+    render(<SankeyChart edges={basicEdges} />);
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+    expect(screen.getByRole("combobox", { name: "Find topic or endpoint" })).toHaveFocus();
+  });
+
+  it("renders the export button into the given header slot instead of the toolbar", () => {
+    const slot = document.createElement("div");
+    document.body.appendChild(slot);
+    render(<SankeyChart edges={basicEdges} exportSlot={slot} />);
+    expect(within(slot).getByRole("button", { name: "Export SVG" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Export SVG" })).toHaveLength(1);
+    slot.remove();
+  });
+
+  it("renders into the given header slot instead of the toolbar", () => {
+    const slot = document.createElement("div");
+    document.body.appendChild(slot);
+    render(<SankeyChart edges={basicEdges} searchSlot={slot} />);
+    expect(within(slot).getByRole("combobox")).toBeInTheDocument();
+    slot.remove();
   });
 });
 
 describe("SankeyChart - view mode toggle", () => {
-  const wildcardEdges: SankeyEdge[] = [
-    { source: "acme/sales/>", target: "Queue: all-sales-q", value: 1 },
-    { source: "acme/sales/orders", target: "Topic Endpoint: te-orders", value: 1 },
-  ];
-
   it("offers both view modes, defaulting to 'Data flow'", () => {
     render(<SankeyChart edges={wildcardEdges} />);
-    const select = screen.getByLabelText("View") as HTMLSelectElement;
-    const optionLabels = Array.from(select.options).map((o) => o.textContent);
-    expect(optionLabels).toEqual(["Data flow (wildcard-aware)", "Subscriptions (literal)"]);
-    expect(select.value).toBe("dataflow");
+    const group = screen.getByRole("group", { name: "View" });
+    const buttons = within(group).getAllByRole("button");
+    expect(buttons.map((b) => b.textContent)).toEqual(["Data flow", "Literal subscriptions"]);
+    expect(buttons[0]).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("'Data flow' mode (default) shows the implied wildcard-covered endpoint even without filtering", () => {
+  it("'Data flow' mode (default) shows the implied wildcard-covered endpoint", () => {
     render(<SankeyChart edges={wildcardEdges} />);
     expect(screen.getByText("all-sales-q")).toBeInTheDocument();
     expect(screen.getByText("te-orders")).toBeInTheDocument();
   });
 
-  it("switching to 'Subscriptions' mode shows only the literal, declared subscriptions - no implied wildcard coverage", async () => {
+  it("'Literal subscriptions' mode drops implied wildcard coverage", async () => {
     const user = userEvent.setup();
     render(<SankeyChart edges={wildcardEdges} />);
 
-    await user.selectOptions(screen.getByLabelText("View"), "Subscriptions (literal)");
+    await user.click(screen.getByRole("button", { name: "Literal subscriptions" }));
+    expect(screen.getByRole("button", { name: "Literal subscriptions" })).toHaveAttribute("aria-pressed", "true");
 
-    // Both endpoints still exist (each has its own real subscription)...
-    expect(screen.getByText("all-sales-q")).toBeInTheDocument();
-    expect(screen.getByText("te-orders")).toBeInTheDocument();
-    // ...but the ">" wildcard segment node (acme/sales/>) must no longer
-    // fan out to the "orders" topic node's queue - i.e. clicking "orders"
-    // in literal mode must NOT reveal the queue reached only via wildcard.
     await user.click(screen.getByText("orders"));
-    expect(screen.queryByText("all-sales-q")).not.toBeInTheDocument();
-    expect(screen.getByText("te-orders")).toBeInTheDocument();
+    expect(within(panel()).queryByText("all-sales-q")).not.toBeInTheDocument();
+    expect(within(panel()).getByText("te-orders")).toBeInTheDocument();
   });
 
   it("switching view mode resets any active node selection", async () => {
@@ -193,46 +504,36 @@ describe("SankeyChart - view mode toggle", () => {
     render(<SankeyChart edges={wildcardEdges} />);
 
     await user.click(screen.getByText("orders"));
-    expect(await screen.findByRole("button", { name: "Back to overview" })).toBeInTheDocument();
+    expect(panel()).toBeInTheDocument();
 
-    await user.selectOptions(screen.getByLabelText("View"), "Subscriptions (literal)");
-    expect(screen.queryByRole("button", { name: "Back to overview" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Literal subscriptions" }));
+    expect(screen.queryByRole("complementary", { name: "Selection details" })).not.toBeInTheDocument();
   });
 });
 
-describe("SankeyChart - show direct subscribers toggle", () => {
+describe("SankeyChart - direct subscribers toggle", () => {
   const mixedEdges: SankeyEdge[] = [
     { source: "acme/sales", target: "Queue: orders-q", value: 1 },
     { source: "acme/sales", target: "Direct Subscriber: my-app-1", value: 1 },
   ];
 
-  it("is checked by default, showing direct subscribers alongside other endpoints", () => {
+  it("is on by default, showing direct subscribers alongside other endpoints", () => {
     render(<SankeyChart edges={mixedEdges} />);
-    const checkbox = screen.getByLabelText("Show direct subscribers") as HTMLInputElement;
-    expect(checkbox.checked).toBe(true);
+    expect(screen.getByLabelText("Direct subscribers")).toBeChecked();
     expect(screen.getByText("orders-q")).toBeInTheDocument();
     expect(screen.getByText("my-app-1")).toBeInTheDocument();
   });
 
-  it("unchecking it hides direct-subscriber nodes but keeps queues/topic-endpoints", async () => {
+  it("switching it off hides direct subscribers, switching it on brings them back", async () => {
     const user = userEvent.setup();
     render(<SankeyChart edges={mixedEdges} />);
+    const toggle = screen.getByLabelText("Direct subscribers");
 
-    await user.click(screen.getByLabelText("Show direct subscribers"));
-
+    await user.click(toggle);
     expect(screen.getByText("orders-q")).toBeInTheDocument();
     expect(screen.queryByText("my-app-1")).not.toBeInTheDocument();
-  });
 
-  it("re-checking it brings direct subscribers back", async () => {
-    const user = userEvent.setup();
-    render(<SankeyChart edges={mixedEdges} />);
-
-    const checkbox = screen.getByLabelText("Show direct subscribers");
-    await user.click(checkbox);
-    expect(screen.queryByText("my-app-1")).not.toBeInTheDocument();
-
-    await user.click(checkbox);
+    await user.click(toggle);
     expect(screen.getByText("my-app-1")).toBeInTheDocument();
   });
 
@@ -241,10 +542,10 @@ describe("SankeyChart - show direct subscribers toggle", () => {
     render(<SankeyChart edges={mixedEdges} />);
 
     await user.click(screen.getByText("orders-q"));
-    expect(await screen.findByRole("button", { name: "Back to overview" })).toBeInTheDocument();
+    expect(panel()).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText("Show direct subscribers"));
-    expect(screen.queryByRole("button", { name: "Back to overview" })).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText("Direct subscribers"));
+    expect(screen.queryByRole("complementary", { name: "Selection details" })).not.toBeInTheDocument();
   });
 });
 
@@ -253,7 +554,6 @@ describe("SankeyChart - svg structure", () => {
     render(<SankeyChart edges={basicEdges} />);
     const svg = screen.getByRole("img", { name: "Topic to endpoint Sankey diagram" });
     expect(svg.tagName.toLowerCase()).toBe("svg");
-    // Sanity check there are actual node rects drawn, not just an empty svg.
     expect(within(svg).getAllByText("orders-q").length).toBeGreaterThan(0);
   });
 });
@@ -263,7 +563,7 @@ describe("SankeyChart - SVG export", () => {
     vi.unstubAllGlobals();
   });
 
-  it("downloads a standalone, background-filled copy of the live diagram", async () => {
+  it("downloads a standalone, background-filled copy of the live diagram, badges included", async () => {
     const user = userEvent.setup();
     const createObjectURL = vi.fn().mockReturnValue("blob:mock-url");
     const revokeObjectURL = vi.fn();
@@ -271,7 +571,7 @@ describe("SankeyChart - SVG export", () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     render(<SankeyChart edges={basicEdges} />);
-    await user.click(screen.getByRole("button", { name: "Export as SVG" }));
+    await user.click(screen.getByRole("button", { name: "Export SVG" }));
 
     expect(createObjectURL).toHaveBeenCalledOnce();
     const blob = createObjectURL.mock.calls[0]![0] as Blob;
@@ -280,6 +580,8 @@ describe("SankeyChart - SVG export", () => {
     expect(text).toContain("<svg");
     expect(text).toContain('fill="#093B5F"'); // the added standalone background
     expect(text).toContain("orders-q");
+    // Badge colors are inline attributes, so the export (no stylesheet) keeps them.
+    expect(text).toContain('fill="#00C895"');
     expect(clickSpy).toHaveBeenCalledOnce();
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
 

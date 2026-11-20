@@ -20,3 +20,17 @@ export function endpointTypeLabel(id: string): string | null {
   if (id.startsWith("Direct Subscriber:")) return "Direct Subscriber";
   return null;
 }
+
+export type EndpointTypeCode = "Q" | "TE" | "DS";
+
+/**
+ * Short badge code drawn next to an endpoint's name in the diagram (and in
+ * the selection panel), so the type reads at a glance without a full
+ * "Queue"/"Topic Endpoint" sub-line. Null for topic hierarchy ids.
+ */
+export function endpointTypeCode(id: string): EndpointTypeCode | null {
+  if (id.startsWith("Queue:")) return "Q";
+  if (id.startsWith("Topic Endpoint:")) return "TE";
+  if (id.startsWith("Direct Subscriber:")) return "DS";
+  return null;
+}

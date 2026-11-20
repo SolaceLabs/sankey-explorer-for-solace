@@ -14,6 +14,17 @@ describe("buildBrokerColorPalette", () => {
     expect(palette.get("Broker-A")).not.toBe(palette.get("Broker-B"));
   });
 
+  it("never uses a color that already means something else in the UI", () => {
+    const used = new Set(
+      buildBrokerColorPalette(Array.from({ length: 20 }, (_, i) => `Broker-${i}`)).values(),
+    );
+    // Orange = warning, Bright Green = selection, Light Blue = topics and
+    // topic endpoints, White = direct subscribers.
+    for (const reserved of ["#FCA829", "#ABFF88", "#C2F7FF", "#FFFFFF"]) {
+      expect(used.has(reserved)).toBe(false);
+    }
+  });
+
   it("cycles the palette when there are more brokers than colors", () => {
     const manyBrokers = Array.from({ length: 20 }, (_, i) => `Broker-${i}`);
     const palette = buildBrokerColorPalette(manyBrokers);

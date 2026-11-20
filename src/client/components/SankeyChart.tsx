@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { sankeyLinkHorizontal } from "d3-sankey";
 import { computeSankeyLayout, resolvedLinkIds, type SortMode } from "../lib/sankeyLayout";
 import { buildDisplayEdges, type DiagramViewMode } from "../lib/buildDisplayEdges";
 import { downloadSvg } from "../lib/exportSvg";
-import { nodeDisplayLabel } from "../lib/nodeDisplayLabel";
-import { endpointDisplayName } from "../lib/endpointDisplayName";
 import { filterToRelevantSubgraph } from "../lib/filterToRelevantSubgraph";
+import { describeSelection } from "../lib/describeSelection";
+import { columnHeadings } from "../lib/columnHeadings";
 import type { EndpointBrokerColors } from "../lib/buildEndpointBrokerColors";
-import { endpointTypeLabel, isEndpointNode } from "../lib/nodeKind";
+import { isEndpointNode } from "../lib/nodeKind";
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
+import { DiagramToolbar } from "./DiagramToolbar";
+import { DiagramSearch } from "./DiagramSearch";
+import { ExportSvgButton } from "./ExportSvgButton";
+import { SelectionPanel } from "./SelectionPanel";
+import { SankeyNode } from "./SankeyNode";
 
 interface SankeyChartProps {
   edges: SankeyEdge[];
@@ -16,34 +22,66 @@ interface SankeyChartProps {
   endpointBrokerColors?: EndpointBrokerColors;
   endpointBrokerLabels?: Map<string, string>;
   endpointVpnHost?: Map<string, string>;
+  /** Names of endpoints without any subscription - counted in the toolbar. */
+  unsubscribedEndpoints?: string[];
+  /**
+   * Where to render the search: an element in the app header (portal), so
+   * it sits centered in the top bar while its state stays here, next to the
+   * selection it drives. `undefined` renders it inline in the toolbar
+   * (standalone use, tests); `null` means the slot is not mounted yet.
+   */
+  searchSlot?: HTMLElement | null;
+  /** Where to render the export button - same contract as searchSlot. */
+  exportSlot?: HTMLElement | null;
 }
 
 const FLOW_GRADIENT_ID = "sankey-flow-gradient";
+// Below this the columns and labels collide; narrower screens scroll the
+// diagram horizontally instead of squeezing it.
+const MIN_DIAGRAM_WIDTH = 720;
 
-// Solace Brand Book 2025 v3.0, p.17 (Primary/Secondary Color Palette).
+// Solace Brand Book 2025 v3.0, p.17. Type colors match the Q / TE / DS
+// badges (see SankeyNode, EndpointTypeBadge, index.css).
+const TYPE_COLORS = { queue: "#00C895", topicEndpoint: "#C2F7FF", directSubscriber: "#FFFFFF" };
+
 function nodeColor(id: string, brokerColors: EndpointBrokerColors | undefined): string {
   if (!isEndpointNode(id)) return "#C2F7FF"; // Secondary Light Blue - topic/hierarchy nodes
 
   // With 2+ brokers connected, color endpoints by broker instead of by
   // type - which broker an endpoint belongs to is the more useful signal
-  // once you're merging several brokers' worth of data. With just one
-  // broker, broker color would be meaningless (every endpoint the same
-  // color), so fall back to the original type-based coloring.
+  // once several brokers are merged, and the badge still shows the type.
   if (brokerColors && brokerColors.brokerCount > 1) {
     const color = brokerColors.colorByEndpointLabel.get(id);
     if (color) return color;
   }
 
-  if (id.startsWith("Queue:")) return "#00C895"; // Classic Green - 01
-  if (id.startsWith("Topic Endpoint:")) return "#FCA829"; // Secondary Orange
-  return "#FFF7C2"; // Secondary Sunrise Yellow - Direct Subscriber
+  if (id.startsWith("Queue:")) return TYPE_COLORS.queue;
+  if (id.startsWith("Topic Endpoint:")) return TYPE_COLORS.topicEndpoint;
+  return TYPE_COLORS.directSubscriber;
 }
 
-function edgeKey(source: string, target: string): string {
-  return `${source}\u0000${target}`;
-}
+const edgeKey = (source: string, target: string): string => `${source}\u0000${target}`;
 
 const linkPath = sankeyLinkHorizontal();
+
+// Highlighting and "Show only this" follow what actually reaches a node:
+// in data-flow mode a wildcard endpoint's covered topics belong to its flow.
+// (Literal mode has no implied edges, so this changes nothing there.)
+const FLOW_OPTIONS = { includeImpliedAncestors: true } as const;
+
+const uniqueNodeIds = (edges: SankeyEdge[]): string[] => [
+  ...new Set(edges.flatMap((e) => [e.source, e.target])),
+];
+
+interface Selection {
+  nodeId: string;
+  /** "Show only this": the diagram is reduced to the node's flow. */
+  focused: boolean;
+  // The context the selection was made in - see selectedNode below.
+  edges: SankeyEdge[];
+  viewMode: DiagramViewMode;
+  showDirectSubscribers: boolean;
+}
 
 export type { DiagramViewMode };
 
@@ -53,31 +91,24 @@ export function SankeyChart({
   endpointBrokerColors,
   endpointBrokerLabels,
   endpointVpnHost,
+  unsubscribedEndpoints = [],
+  searchSlot,
+  exportSlot,
 }: SankeyChartProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(800);
-  // The selection remembers which data/mode it was made in; it only counts
-  // while that context is unchanged. Derived during render (instead of an
-  // effect that resets it) so there is no extra render with a stale
-  // selection, and no setState-in-effect.
-  const [selection, setSelection] = useState<{
-    nodeId: string;
-    edges: SankeyEdge[];
-    viewMode: DiagramViewMode;
-    showDirectSubscribers: boolean;
-  } | null>(null);
-  // A hovered LINK resolves to its target node id here, not a separate
+  const [selection, setSelection] = useState<Selection | null>(null);
+  // A hovered LINK resolves to its target node id, not a separate
   // edge-shaped state - see filterToRelevantSubgraph's doc comment for why
-  // that guarantees hovering/clicking a connector and the block/text it
-  // leads into are always exactly the same, by construction.
+  // hovering a connector and the block it leads into are identical.
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("crossing");
   const [viewMode, setViewMode] = useState<DiagramViewMode>("dataflow");
   const [showDirectSubscribers, setShowDirectSubscribers] = useState(true);
 
   useEffect(() => {
-    const el = containerRef.current;
+    const el = canvasRef.current;
     if (!el) return;
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
@@ -87,79 +118,73 @@ export function SankeyChart({
     return () => observer.disconnect();
   }, []);
 
-  // New data (reconnect/refresh), switching view mode, or toggling direct
-  // subscribers invalidate a selection: its node may no longer exist (e.g. a
-  // node only reachable via an implied wildcard edge disappears when
-  // switching from "dataflow" to "subscriptions"; a direct-subscriber node
-  // disappears when that toggle is switched off).
-  const selectedNodeId =
+  // New data, another view mode or toggling direct subscribers invalidate a
+  // selection (its node may be gone). Derived during render instead of an
+  // effect that resets it: no extra render with a stale selection.
+  const selected =
     selection &&
     selection.edges === edges &&
     selection.viewMode === viewMode &&
     selection.showDirectSubscribers === showDirectSubscribers
-      ? selection.nodeId
+      ? selection
       : null;
-  function setSelectedNodeId(nodeId: string | null) {
-    setSelection(nodeId === null ? null : { nodeId, edges, viewMode, showDirectSubscribers });
-  }
+  const select = (nodeId: string | null, focused = false) =>
+    setSelection(nodeId === null ? null : { nodeId, focused, edges, viewMode, showDirectSubscribers });
 
-  // Raw edges -> hierarchy edges (see buildDisplayEdges for the order of steps).
   const explodedEdges = useMemo(
     () => buildDisplayEdges(edges, { viewMode, showDirectSubscribers }),
     [edges, viewMode, showDirectSubscribers],
   );
+  const allNodeIds = useMemo(() => uniqueNodeIds(explodedEdges), [explodedEdges]);
 
-  const displayEdges = useMemo(() => {
-    if (!selectedNodeId) return explodedEdges;
-    return filterToRelevantSubgraph(explodedEdges, selectedNodeId);
-  }, [explodedEdges, selectedNodeId]);
+  const selectedId = selected?.nodeId ?? null;
+  const isFocused = Boolean(selected?.focused);
+  const displayEdges = useMemo(
+    () => (isFocused && selectedId ? filterToRelevantSubgraph(explodedEdges, selectedId, FLOW_OPTIONS) : explodedEdges),
+    [explodedEdges, isFocused, selectedId],
+  );
+  const details = useMemo(
+    () => (selectedId ? describeSelection(explodedEdges, selectedId) : null),
+    [explodedEdges, selectedId],
+  );
 
-  const nodeCount = useMemo(() => {
-    const ids = new Set<string>();
-    displayEdges.forEach((e) => {
-      ids.add(e.source);
-      ids.add(e.target);
-    });
-    return ids.size;
-  }, [displayEdges]);
-
-  const height = Math.max(420, nodeCount * 24);
+  const diagramWidth = Math.max(width, MIN_DIAGRAM_WIDTH);
+  const height = Math.max(420, uniqueNodeIds(displayEdges).length * 24);
   const showVpnHost = Boolean(endpointBrokerColors && endpointBrokerColors.brokerCount > 1);
   const graph = useMemo(
     () =>
       computeSankeyLayout(
         displayEdges,
-        width,
+        diagramWidth,
         height,
         sortMode,
         endpointOwners,
         endpointBrokerLabels,
         showVpnHost ? endpointVpnHost : undefined,
       ),
-    [
-      displayEdges,
-      width,
-      height,
-      sortMode,
-      endpointOwners,
-      endpointBrokerLabels,
-      endpointVpnHost,
-      showVpnHost,
-    ],
+    [displayEdges, diagramWidth, height, sortMode, endpointOwners, endpointBrokerLabels, endpointVpnHost, showVpnHost],
   );
 
-  // The whole ancestor+descendant flow through whatever is hovered. A
-  // hovered link already arrives here as its target node id (see above),
-  // so this one call handles nodes, text, and links identically.
-  const hoveredFlowEdgeKeys = useMemo(() => {
-    if (!hoveredNodeId) return null;
-    const relevant = filterToRelevantSubgraph(displayEdges, hoveredNodeId);
-    return new Set(relevant.map((e) => edgeKey(e.source, e.target)));
-  }, [displayEdges, hoveredNodeId]);
+  // Hover wins over the selection, so pointing at something else while a
+  // panel is open still previews that flow.
+  const highlightId = hoveredNodeId ?? selectedId;
+  const highlight = useMemo(() => {
+    if (!highlightId) return null;
+    const relevant = filterToRelevantSubgraph(displayEdges, highlightId, FLOW_OPTIONS);
+    return {
+      edgeKeys: new Set(relevant.map((e) => edgeKey(e.source, e.target))),
+      nodeIds: new Set([highlightId, ...uniqueNodeIds(relevant)]),
+    };
+  }, [displayEdges, highlightId]);
 
-  function handleExportSvg() {
-    if (svgRef.current) downloadSvg(svgRef.current, width, height);
-  }
+  const stats = useMemo(
+    () => ({
+      topics: allNodeIds.filter((id) => !isEndpointNode(id)).length,
+      endpoints: allNodeIds.filter(isEndpointNode).length,
+      unsubscribedEndpoints,
+    }),
+    [allNodeIds, unsubscribedEndpoints],
+  );
 
   if (edges.length === 0) {
     return (
@@ -171,252 +196,126 @@ export function SankeyChart({
     );
   }
 
+  const search = <DiagramSearch nodeIds={allNodeIds} onFind={(id) => select(id)} />;
+  const exportButton = (
+    <ExportSvgButton onExport={() => svgRef.current && downloadSvg(svgRef.current, diagramWidth, height)} />
+  );
+  const subLinesFor = (id: string): string[] => {
+    const lines: string[] = [];
+    const owner = endpointOwners?.get(id);
+    if (owner) lines.push(owner);
+    const vpnHost = showVpnHost ? endpointVpnHost?.get(id) : undefined;
+    if (vpnHost) lines.push(vpnHost);
+    return lines;
+  };
+
   return (
-    <div ref={containerRef} className="sankey-container">
-      <div className="sankey-toolbar">
-        <div className="toolbar-group">
-          <label className="toolbar-control">
-            <span>View</span>
-            <select
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as DiagramViewMode)}
-            >
-              <option value="dataflow">Data flow (wildcard-aware)</option>
-              <option value="subscriptions">Subscriptions (literal)</option>
-            </select>
-          </label>
-          <label className="toolbar-toggle">
-            <input
-              type="checkbox"
-              className="toolbar-toggle-input"
-              checked={showDirectSubscribers}
-              onChange={(e) => setShowDirectSubscribers(e.target.checked)}
-            />
-            <span className="toolbar-toggle-track" aria-hidden="true" />
-            <span>Show direct subscribers</span>
-          </label>
+    <div className="sankey-container">
+      {searchSlot && createPortal(search, searchSlot)}
+      {exportSlot && createPortal(exportButton, exportSlot)}
+      <DiagramToolbar
+        leading={searchSlot === undefined ? search : null}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        showDirectSubscribers={showDirectSubscribers}
+        onShowDirectSubscribersChange={setShowDirectSubscribers}
+        sortMode={sortMode}
+        onSortModeChange={setSortMode}
+        stats={stats}
+        isFocused={isFocused}
+        onBackToOverview={() => select(selectedId, false)}
+        trailing={exportSlot === undefined ? exportButton : null}
+      />
+      <div className="sankey-workspace">
+        <div ref={canvasRef} className="sankey-canvas">
+          <div className="sankey-stage" style={{ width: diagramWidth }}>
+            <div className="sankey-columns" aria-hidden="true">
+              {columnHeadings(graph.nodes).map((heading) => (
+                <span key={heading.label} style={{ left: heading.x }}>
+                  {heading.label}
+                </span>
+              ))}
+            </div>
+            <svg ref={svgRef} width={diagramWidth} height={height} role="img" aria-label="Topic to endpoint Sankey diagram">
+              <defs>
+                {/* Solace Brand Book 2025 v3.0, p.17, Gradient 16: Deep Green ->
+                    Deep Blue. userSpaceOnUse (not the SVG default
+                    objectBoundingBox) so this is ONE gradient spanning the whole
+                    diagram width - every highlighted link samples its slice of
+                    the same left-to-right sweep instead of restarting per link. */}
+                <linearGradient id={FLOW_GRADIENT_ID} gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={diagramWidth} y2={0}>
+                  <stop offset="0%" stopColor="#009193" />
+                  <stop offset="100%" stopColor="#093B5F" />
+                </linearGradient>
+              </defs>
+              <g>
+                {graph.links.map((link, i) => {
+                  const d = linkPath(link as never);
+                  if (!d) return null;
+                  const { sourceId, targetId } = resolvedLinkIds(link);
+                  // Only the highlighted flow changes; every other link keeps
+                  // its normal look while something is hovered or selected.
+                  const isHighlighted = highlight?.edgeKeys.has(edgeKey(sourceId, targetId));
+                  const visualStrokeWidth = Math.max(1, link.width ?? 1);
+                  return (
+                    <g key={i}>
+                      {/* Invisible, generously wide hit target; resolves to the
+                          link's TARGET node, exactly like its block/label. */}
+                      <path
+                        d={d}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={Math.max(14, visualStrokeWidth)}
+                        style={{ cursor: "pointer" }}
+                        onMouseEnter={() => setHoveredNodeId(targetId)}
+                        onMouseLeave={() => setHoveredNodeId(null)}
+                        onClick={() => select(targetId)}
+                      />
+                      <path
+                        d={d}
+                        fill="none"
+                        stroke={isHighlighted ? `url(#${FLOW_GRADIENT_ID})` : "#C2F7FF"}
+                        strokeOpacity={isHighlighted ? 0.75 : 0.2}
+                        strokeWidth={visualStrokeWidth}
+                        style={{ pointerEvents: "none" }}
+                      />
+                    </g>
+                  );
+                })}
+              </g>
+              <g>
+                {graph.nodes.map((node) => {
+                  const isEndpoint = isEndpointNode(node.id);
+                  return (
+                    <SankeyNode
+                      key={node.id}
+                      node={node}
+                      isEndpoint={isEndpoint}
+                      isSelected={node.id === selectedId}
+                      // Only a clicked selection dims the rest; hovering
+                      // just adds the gradient to the hovered flow.
+                      isDimmed={Boolean(!hoveredNodeId && highlight && !highlight.nodeIds.has(node.id))}
+                      color={nodeColor(node.id, endpointBrokerColors)}
+                      subLines={isEndpoint ? subLinesFor(node.id) : []}
+                      onHover={setHoveredNodeId}
+                      onSelect={(id) => select(id)}
+                    />
+                  );
+                })}
+              </g>
+            </svg>
+          </div>
         </div>
-        {/* Divider + "Sort by" grouped into one flex item, so flex-wrap on
-            the toolbar never leaves the divider dangling alone at the end
-            of a wrapped row - it only ever wraps together with the
-            control it's introducing. */}
-        <div className="toolbar-group">
-          <div className="toolbar-divider" aria-hidden="true" />
-          <label className="toolbar-control">
-            <span>Sort by</span>
-            <select
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as SortMode)}
-            >
-              <option value="topic">Topic name</option>
-              <option value="queue">Endpoint</option>
-              <option value="owner">Owner</option>
-              <option value="messageVpn">Message VPN</option>
-              <option value="crossing">Crossing minimized</option>
-            </select>
-          </label>
-        </div>
-        <div className="toolbar-group toolbar-actions">
-          {selectedNodeId && (
-            <button
-              type="button"
-              className="toolbar-button"
-              onClick={() => setSelectedNodeId(null)}
-            >
-              Back to overview
-            </button>
-          )}
-          <button type="button" className="toolbar-button" onClick={handleExportSvg}>
-            Export as SVG
-          </button>
-        </div>
+        {details && (
+          <SelectionPanel
+            details={details}
+            isFocused={isFocused}
+            onToggleFocus={() => select(details.id, !isFocused)}
+            onClose={() => select(null)}
+            endpointOwners={endpointOwners}
+          />
+        )}
       </div>
-      <svg
-        ref={svgRef}
-        width={width}
-        height={height}
-        role="img"
-        aria-label="Topic to endpoint Sankey diagram"
-      >
-        <defs>
-          {/* Solace Brand Book 2025 v3.0, p.17, Gradient 16: Deep Green ->
-              Deep Blue. userSpaceOnUse (not the SVG default
-              objectBoundingBox) so this is ONE gradient spanning the whole
-              diagram width - every highlighted link samples its slice of
-              the same left-to-right sweep instead of getting its own
-              isolated mini-gradient. */}
-          <linearGradient
-            id={FLOW_GRADIENT_ID}
-            gradientUnits="userSpaceOnUse"
-            x1={0}
-            y1={0}
-            x2={width}
-            y2={0}
-          >
-            <stop offset="0%" stopColor="#009193" />
-            <stop offset="100%" stopColor="#093B5F" />
-          </linearGradient>
-        </defs>
-        <g>
-          {graph.links.map((link, i) => {
-            const d = linkPath(link as never);
-            if (!d) return null;
-            const { sourceId, targetId } = resolvedLinkIds(link);
-            const isPartOfHoveredFlow = hoveredFlowEdgeKeys?.has(
-              edgeKey(sourceId, targetId),
-            );
-            const visualStrokeWidth = Math.max(1, link.width ?? 1);
-            return (
-              <g key={i}>
-                {/* Invisible, generously wide hit target - thin/low-value
-                    flows are otherwise nearly impossible to hover
-                    precisely. The visible path below has pointer-events
-                    disabled so this is the only thing handling hover/click.
-                    Both resolve to the link's TARGET node, so hovering or
-                    clicking a connector behaves exactly like hovering or
-                    clicking the block/text it leads into. */}
-                <path
-                  d={d}
-                  fill="none"
-                  stroke="transparent"
-                  strokeWidth={Math.max(14, visualStrokeWidth)}
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={() => setHoveredNodeId(targetId)}
-                  onMouseLeave={() => setHoveredNodeId(null)}
-                  onClick={() => setSelectedNodeId(targetId)}
-                />
-                <path
-                  d={d}
-                  fill="none"
-                  stroke={isPartOfHoveredFlow ? `url(#${FLOW_GRADIENT_ID})` : "#C2F7FF"}
-                  strokeOpacity={isPartOfHoveredFlow ? 0.75 : 0.2}
-                  strokeWidth={visualStrokeWidth}
-                  style={{ pointerEvents: "none" }}
-                />
-              </g>
-            );
-          })}
-        </g>
-        <g>
-          {graph.nodes.map((node) => {
-            const x0 = node.x0 ?? 0;
-            const x1 = node.x1 ?? 0;
-            const y0 = node.y0 ?? 0;
-            const y1 = node.y1 ?? 0;
-            // Endpoint column (the last level) gets its label to the
-            // RIGHT of the bar; every other level gets it to the LEFT.
-            // Deciding this by node ROLE rather than x-position avoids
-            // labels flipping once a hierarchy has many levels and a
-            // mid-level column's x-position crosses the diagram's midpoint.
-            const isEndpoint = isEndpointNode(node.id);
-            const labelOnRight = isEndpoint;
-            const isSelected = node.id === selectedNodeId;
-            const handleHoverStart = () => setHoveredNodeId(node.id);
-            const handleHoverEnd = () => setHoveredNodeId(null);
-
-            const mainLabel = isEndpoint
-              ? endpointDisplayName(node.id)
-              : nodeDisplayLabel(node.id);
-
-            // Endpoint nodes stack up to three small sub-lines below the
-            // name: type (Queue/Topic Endpoint - replaces the old "Queue: "
-            // prefix on the name itself), owner (if the broker reports
-            // one), and "vpn at host" (only shown once 2+ message VPNs are
-            // connected - otherwise it's the same for every node and just
-            // adds noise). Topic hierarchy nodes never have any of these.
-            const subLines: string[] = [];
-            if (isEndpoint) {
-              const type = endpointTypeLabel(node.id);
-              if (type) subLines.push(type);
-              const owner = endpointOwners?.get(node.id);
-              if (owner) subLines.push(owner);
-              if (showVpnHost) {
-                const vpnHost = endpointVpnHost?.get(node.id);
-                if (vpnHost) subLines.push(vpnHost);
-              }
-            }
-
-            const lineHeight = 11;
-            const totalLines = 1 + subLines.length;
-            const blockStartY = (y0 + y1) / 2 - ((totalLines - 1) * lineHeight) / 2;
-
-            // Same idea as the links above: a generous invisible hit rect
-            // (min. 10px tall, min. 4px padding) so thin, low-value nodes
-            // are still easy to hover, independent of their true visual size.
-            const visualHeight = Math.max(1, y1 - y0);
-            const hitHeight = Math.max(10, visualHeight);
-            const hitY = (y0 + y1) / 2 - hitHeight / 2;
-            const hitWidth = Math.max(1, x1 - x0) + 4;
-            const hitX = x0 - 2;
-
-            return (
-              <g
-                key={node.id}
-                className={
-                  isSelected ? "sankey-node sankey-node--selected" : "sankey-node"
-                }
-                onClick={() => setSelectedNodeId(node.id)}
-              >
-                <rect
-                  x={x0}
-                  y={y0}
-                  width={Math.max(1, x1 - x0)}
-                  height={visualHeight}
-                  fill={nodeColor(node.id, endpointBrokerColors)}
-                  stroke={isSelected ? "#ABFF88" : "none"}
-                  strokeWidth={isSelected ? 2 : 0}
-                  rx={2}
-                  style={{ pointerEvents: "none" }}
-                >
-                  <title>{node.id} (click to filter)</title>
-                </rect>
-                <rect
-                  x={hitX}
-                  y={hitY}
-                  width={hitWidth}
-                  height={hitHeight}
-                  fill="transparent"
-                  onMouseEnter={handleHoverStart}
-                  onMouseLeave={handleHoverEnd}
-                >
-                  <title>{node.id} (click to filter)</title>
-                </rect>
-                <text
-                  x={labelOnRight ? x1 + 6 : x0 - 6}
-                  y={blockStartY}
-                  dy="0.32em"
-                  textAnchor={labelOnRight ? "start" : "end"}
-                  fontSize={12}
-                  fontWeight={isSelected ? 700 : 400}
-                  fontFamily='"Space Mono", monospace'
-                  fill={isSelected ? "#ABFF88" : "#FFFFFF"}
-                  onMouseEnter={handleHoverStart}
-                  onMouseLeave={handleHoverEnd}
-                >
-                  <title>{node.id} (click to filter)</title>
-                  {mainLabel}
-                </text>
-                {subLines.map((line, i) => (
-                  <text
-                    key={i}
-                    x={labelOnRight ? x1 + 6 : x0 - 6}
-                    y={blockStartY + (i + 1) * lineHeight}
-                    dy="0.32em"
-                    textAnchor={labelOnRight ? "start" : "end"}
-                    fontSize={10}
-                    fontFamily='"Space Mono", monospace'
-                    fill="rgba(255, 255, 255, 0.55)"
-                    onMouseEnter={handleHoverStart}
-                    onMouseLeave={handleHoverEnd}
-                  >
-                    {line}
-                  </text>
-                ))}
-              </g>
-            );
-          })}
-        </g>
-      </svg>
     </div>
   );
 }

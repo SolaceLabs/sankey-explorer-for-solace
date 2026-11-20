@@ -11,11 +11,13 @@
   color-scheme: dark;
 
   --bg: #08223C;              /* Dark Blue - 04 (main background) */
-  --panel: #093B5F;           /* Deep Blue - 03 (cards, topbar) */
+  --panel: #093B5F;           /* Deep Blue - 03 (cards, side panel) */
+  --surface: rgba(3, 33, 59, 0.65); /* controls sitting on the gradient */
   --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
 
   --text: #FFFFFF;
-  --text-dim: rgba(255, 255, 255, 0.65);
+  --text-dim: rgba(255, 255, 255, 0.68);
 
   --accent: #00C895;          /* Classic Green - 01 (primary actions) */
   --accent-text: #08223C;     /* Dark Blue - per brand book p.18, the text
@@ -29,10 +31,21 @@
 
   --error: #E0685C;           /* not from the brand book - see comment above */
 
+  /* Three radii, nothing in between: controls are pills, surfaces (cards,
+     panels, menus) 20px, entries inside a surface 12px. */
+  --radius-pill: 999px;
+  --radius-surface: 20px;
+  --radius-inner: 12px;
+  --surface-border: rgba(194, 247, 255, 0.14);
+  --surface-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+  /* One height for every control - buttons, pills, inputs, the search, the
+     view switch - so neighbouring controls always line up. */
+  --control-height: 2.625rem; /* 42px */
+
   /* Figtree is Solace's actual brand typeface (confirmed embedded in the
-     Brand Book PDF's font list) - Space Mono stays reserved for the Sankey
-     diagram labels specifically, per an earlier explicit request not to
-     use it site-wide. */
+     Brand Book PDF's font list) - Space Mono stays reserved for topic and
+     endpoint names (diagram, search, selection panel), per an earlier
+     explicit request not to use it site-wide. */
   font-family: "Figtree", system-ui, -apple-system, sans-serif;
 }
 
@@ -42,8 +55,46 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  /* Brand "Dark Gradient" (Deep Blue -> Dark Blue), only at the very top. */
+  background: linear-gradient(180deg, var(--panel) 0, var(--bg) 360px) no-repeat, var(--bg);
   color: var(--text);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+}
+
+.icon--spinning {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon--spinning {
+    animation: none;
+  }
 }
 
 .app {
@@ -52,40 +103,379 @@ body {
   flex-direction: column;
 }
 
+/* ---------- Top bar: brand | search | VPNs + refresh ---------- */
+
 .topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.25rem;
+  gap: 0.75rem 1.25rem;
+  padding: 0.875rem 2rem;
   border-bottom: 1px solid var(--border);
-  background: var(--panel);
 }
 
-.topbar h1 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.topbar-actions {
+.brand {
+  flex: 1 1 13rem;
   display: flex;
   align-items: center;
   gap: 0.75rem;
 }
 
-.badge {
-  font-size: 0.8rem;
-  color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.15rem 0.6rem;
+.brand-icon {
+  border-radius: 8px;
 }
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.brand-title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brand-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+/* The slot keeps its full width, the pill inside grows within it - so
+   brand and actions never shift when the search expands. */
+.topbar-search {
+  flex: 2 1 20rem;
+  max-width: 32.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.topbar-search:empty {
+  visibility: hidden;
+}
+
+.topbar-actions {
+  flex: 1 1 13rem;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.topbar-export {
+  display: flex;
+}
+
+.topbar-export:empty {
+  display: none;
+}
+
+/* ---------- Buttons ---------- */
+
+button {
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: var(--control-height);
+  padding: 0 1.1rem;
+  background: var(--accent);
+  color: var(--accent-text);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
+.button {
+  font-size: 0.8125rem;
+}
+
+.button--outline {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.button--outline:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--accent);
+}
+
+.button--danger {
+  background: transparent;
+  color: var(--error);
+  border: 1px solid var(--error);
+}
+
+.button--danger:hover:not(:disabled) {
+  background: rgba(224, 104, 92, 0.12);
+}
+
+.icon-button {
+  width: var(--control-height);
+  height: var(--control-height);
+  padding: 0;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+}
+
+.icon-button--primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.icon-button--outline {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+}
+
+.icon-button--quiet {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.icon-button--outline:hover:not(:disabled),
+.icon-button--quiet:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- Search (pill with Cmd/Ctrl K hint) ---------- */
+
+/* Compact while idle, full width once focused (click, typing, Cmd/Ctrl K). */
+.diagram-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 20rem;
+  transition: max-width 0.2s ease;
+}
+
+.diagram-search:focus-within {
+  max-width: 32.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagram-search {
+    transition: none;
+  }
+}
+
+.diagram-search input {
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 4.25rem 0 2.625rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+/* The kbd hint sits where the browser's own clear button would go - hide
+   it so the two don't stack up (!important: Chromium's own style wins
+   otherwise). */
+.diagram-search input::-webkit-search-cancel-button {
+  display: none !important;
+}
+
+/* Suggestions: directly below the field, exactly as wide (see DiagramSearch). */
+.diagram-search-list {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 20rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0.375rem;
+  list-style: none;
+  border-radius: var(--radius-surface);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.diagram-search-option {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border-radius: var(--radius-inner);
+  cursor: pointer;
+}
+
+.diagram-search-option[aria-selected="true"] {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.diagram-search-option-topic,
+.diagram-search-option-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagram-search-option-topic {
+  font-family: "Space Mono", monospace;
+  font-size: 0.8125rem;
+}
+
+.diagram-search-option-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.diagram-search input::placeholder {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.diagram-search input[aria-invalid="true"] {
+  border-color: var(--orange);
+}
+
+.diagram-search-icon {
+  position: absolute;
+  left: 0.875rem;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.diagram-search-kbd {
+  position: absolute;
+  right: 0.625rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  font: 600 0.75rem "Figtree", system-ui, sans-serif;
+  pointer-events: none;
+}
+
+/* ---------- VPN chip + panel ---------- */
+
+.vpn-menu {
+  position: relative;
+}
+
+.vpn-chip {
+  gap: 0.625rem;
+  padding: 0 0.75rem 0 0.875rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(0, 200, 149, 0.45);
+  background: rgba(0, 200, 149, 0.1);
+  color: var(--text);
+  font-size: 0.875rem;
+}
+
+.vpn-chip:hover:not(:disabled) {
+  background: rgba(0, 200, 149, 0.18);
+}
+
+.vpn-chip-dots {
+  display: flex;
+}
+
+.vpn-chip-dots .vpn-dot + .vpn-dot {
+  margin-left: -4px;
+}
+
+.vpn-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--panel);
+  flex-shrink: 0;
+}
+
+.vpn-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 10;
+  width: min(22rem, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: var(--radius-surface);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.vpn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vpn-list-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-inner);
+  background: var(--bg);
+}
+
+.vpn-list-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.vpn-list-host {
+  grid-column: 2;
+  font-family: "Space Mono", monospace;
+  font-size: 0.6875rem;
+  color: var(--text-dim);
+}
+
+.vpn-panel-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* ---------- Screens (login, connect, errors) ---------- */
 
 main {
   flex: 1;
   display: flex;
   align-items: stretch;
   justify-content: center;
+  min-width: 0;
 }
 
 .screen {
@@ -96,27 +486,46 @@ main {
   padding: 2rem;
 }
 
+/* Login / connect card: the same floating Dark Blue surface as the detail
+   panel; its fields and rows switch to Deep Blue to stay visible on it. */
 .card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  background: var(--bg);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-surface);
+  box-shadow: var(--surface-shadow);
   padding: 1.75rem;
-  width: min(360px, 100%);
+  width: min(380px, 100%);
   display: flex;
   flex-direction: column;
   gap: 0.9rem;
 }
 
-/* solace.dev/workshop pattern: a small uppercase, letter-spaced label
-   above a heading (e.g. "EVENT BROKERS" above "Stream events everywhere"). */
+/* Small context line above the card heading, sentence case like the
+   "Selected topic" line in the detail panel. */
 .card .eyebrow {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-family: 'Space Mono', monospace;
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--accent);
   margin: 0;
+}
+
+.card input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])),
+.card .broker-list li {
+  background: var(--panel);
+}
+
+.card details {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.card summary {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.card details p {
+  margin: 0.5rem 0 0;
 }
 
 .card h1 {
@@ -133,37 +542,20 @@ label {
 }
 
 input {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.5rem 0.6rem;
+  font-family: inherit;
   color: var(--text);
+}
+
+/* Text fields (login, connect screen) are pills of the shared height.
+   :where() keeps this at plain element specificity, so component rules
+   like .diagram-search input still win. */
+input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
+  height: var(--control-height);
+  padding: 0 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
   font-size: 0.9rem;
-}
-
-input:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-button {
-  background: var(--accent);
-  color: var(--accent-text);
-  border: none;
-  border-radius: 9999px;
-  padding: 0.55rem 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 
 .hint {
@@ -178,181 +570,12 @@ button:disabled {
   margin: 0;
 }
 
-.sankey-container {
-  width: 100%;
-  padding: 1rem;
-}
-
-.sankey-empty {
-  padding: 2rem;
-  color: var(--text-dim);
-  text-align: center;
-}
-
-/* One cohesive control bar instead of loose controls floating on the page
-   background - grouped left-to-right as: display settings (View, Show
-   direct subscribers) | a divider | Sort by | actions, pinned to the
-   right via margin-left: auto on .toolbar-actions. */
-.sankey-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  flex-wrap: wrap;
-  padding: 0.5rem 0.75rem;
-  margin-bottom: 0.75rem;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-
-.toolbar-group {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.toolbar-divider {
-  width: 1px;
-  align-self: stretch;
-  min-height: 1.25rem;
-  background: var(--border);
-}
-
-.toolbar-actions {
-  gap: 0.5rem;
-  margin-left: auto;
-}
-
-.toolbar-control,
-.toolbar-toggle {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--text-dim);
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.toolbar-toggle {
-  cursor: pointer;
-}
-
-.toolbar-control select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 0.85rem;
-  padding: 0.3rem 0.5rem;
-}
-
-.toolbar-control select:hover {
-  border-color: var(--accent);
-}
-
-/* Custom toggle switch for "Show direct subscribers" - the native checkbox
-   stays in the DOM (visually hidden, not display:none) so it's still
-   focusable/clickable and the surrounding <label> keeps working exactly
-   like any other checkbox; only its look is replaced by the track+thumb
-   drawn via the adjacent span's ::after. */
-.toolbar-toggle-input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.toolbar-toggle-track {
-  position: relative;
-  flex-shrink: 0;
-  width: 30px;
-  height: 17px;
-  border-radius: 999px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.toolbar-toggle-track::after {
-  content: "";
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  transition: transform 0.15s ease, background-color 0.15s ease;
-}
-
-.toolbar-toggle-input:checked + .toolbar-toggle-track {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.toolbar-toggle-input:checked + .toolbar-toggle-track::after {
-  transform: translateX(13px);
-  background: var(--accent-text);
-}
-
-.toolbar-toggle-input:focus-visible + .toolbar-toggle-track {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.toolbar-button {
-  background: transparent;
-  color: var(--text-dim);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.35rem 0.7rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.toolbar-button:hover:not(:disabled) {
-  background: transparent;
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.sankey-node {
-  cursor: pointer;
-}
-
-/* Subtle highlight on hover - a touch brighter plus a thin light outline,
-   nothing flashy. Targets rect/text directly since fill/stroke are set
-   inline via React and a CSS class alone can't override those without
-   this. Excludes the selected node so hover never dilutes its highlight. */
-.sankey-node:not(.sankey-node--selected):hover rect {
-  filter: drop-shadow(0 0 3px var(--accent));
-}
-
-.sankey-node:not(.sankey-node--selected):hover text {
-  fill: var(--accent);
-}
-
-.sankey-node--selected rect {
-  filter: drop-shadow(0 0 3px rgba(171, 255, 136, 0.6));
-}
-
-.ready-view {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
 .banner {
-  margin: 0.75rem 1rem 0;
+  margin: 0.75rem 2rem 0;
   padding: 0.5rem 0.75rem;
   background: rgba(224, 104, 92, 0.12);
   border: 1px solid var(--error);
-  border-radius: 6px;
+  border-radius: var(--radius-inner);
 }
 
 .broker-list {
@@ -369,16 +592,15 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0.25rem 0.25rem 0.25rem 1rem;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-pill);
   font-size: 0.85rem;
 }
 
 .broker-list button {
-  padding: 0.25rem 0.6rem;
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   background: transparent;
   color: var(--error);
   border: 1px solid var(--error);
@@ -403,23 +625,429 @@ button:disabled {
   flex: 1;
 }
 
-.broker-badges {
+/* ---------- Diagram view ---------- */
+
+.ready-view {
+  width: 100%;
+  min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  flex-direction: column;
+}
+
+.sankey-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.sankey-empty {
+  padding: 2rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* Toolbar: view | direct subscribers | sort ... counts | export.
+   Wraps on narrow screens; the spacer pushes counts/export right. */
+.sankey-toolbar {
+  display: flex;
   flex-wrap: wrap;
-}
-
-.broker-badge {
-  display: flex;
   align-items: center;
-  gap: 0.35rem;
-  border-width: 1.5px;
+  gap: 1rem 1.25rem;
+  padding: 1.125rem 2rem 0.375rem;
 }
 
-.broker-badge-dot {
+.sankey-toolbar .diagram-search {
+  flex: 1 1 18rem;
+  max-width: 28rem;
+}
+
+.toolbar-spacer {
+  flex-grow: 1;
+}
+
+.segmented {
+  display: flex;
+  height: var(--control-height);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.segmented-option {
+  /* Fills the switch: shared height minus its 4px padding and 1px border. */
+  height: 100%;
+  padding: 0 1rem;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.segmented-option:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.segmented-option[aria-pressed="true"],
+.segmented-option[aria-pressed="true"]:hover {
+  background: var(--text);
+  color: var(--panel);
+  font-weight: 600;
+}
+
+.toolbar-control,
+.toolbar-toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.toolbar-toggle {
+  position: relative;
+  gap: 0.625rem;
+  cursor: pointer;
+}
+
+.toolbar-control select {
+  font-family: inherit;
+  height: var(--control-height);
+  padding: 0 1rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8125rem;
+}
+
+.toolbar-control select:hover {
+  border-color: var(--accent);
+}
+
+/* Custom toggle switch for "Direct subscribers" - the native checkbox
+   stays in the DOM (visually hidden, not display:none) so it's still
+   focusable/clickable and the surrounding <label> keeps working exactly
+   like any other checkbox; only its look is replaced by the track+thumb
+   drawn via the adjacent span's ::after. */
+.toolbar-toggle-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.toolbar-toggle-track {
+  position: relative;
+  flex-shrink: 0;
+  width: 34px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--border-strong);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.toolbar-toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.toolbar-toggle-input:checked + .toolbar-toggle-track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toolbar-toggle-input:checked + .toolbar-toggle-track::after {
+  transform: translateX(14px);
+  background: var(--accent-text);
+}
+
+.toolbar-toggle-input:focus-visible + .toolbar-toggle-track {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
+.toolbar-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+
+.toolbar-stat--warning {
+  color: var(--orange);
+}
+
+.status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
+  background: currentColor;
+}
+
+.toolbar-button {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.toolbar-button:hover:not(:disabled) {
+  background: transparent;
+  border-color: var(--accent);
+}
+
+/* Diagram + (optional) selection panel side by side; the panel stacks
+   below the diagram on narrow screens. */
+.sankey-workspace {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.sankey-canvas {
+  flex: 999 1 560px;
+  min-width: 0;
+  padding: 0.75rem 2rem 2rem;
+  overflow-x: auto; /* see MIN_DIAGRAM_WIDTH in SankeyChart */
+}
+
+.sankey-stage {
+  position: relative;
+  padding-top: 1.5rem;
+}
+
+.sankey-columns {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.sankey-columns span {
+  position: absolute;
+  white-space: nowrap;
+}
+
+.sankey-node {
+  cursor: pointer;
+}
+
+/* Subtle highlight on hover - a touch brighter plus a thin light outline,
+   nothing flashy. Targets rect/text directly since fill/stroke are set
+   inline via React and a CSS class alone can't override those without
+   this. Excludes the selected node so hover never dilutes its highlight. */
+.sankey-node:not(.sankey-node--selected):hover rect {
+  filter: drop-shadow(0 0 3px var(--accent));
+}
+
+.sankey-node:not(.sankey-node--selected):hover .sankey-node-label {
+  fill: var(--accent);
+}
+
+.sankey-node--selected rect {
+  filter: drop-shadow(0 0 3px rgba(171, 255, 136, 0.6));
+}
+
+/* ---------- Selection panel ---------- */
+
+/* A floating, rounded Dark Blue card beside the diagram (design 9a); its
+   entries are rounded Deep Blue cards - the inverse of the card itself. */
+/* Never taller than the window and sticky, so it scrolls along with a tall
+   diagram and its buttons stay in view; a long endpoint list scrolls inside. */
+.selection-panel {
+  flex: 1 1 340px;
+  max-width: 384px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  position: sticky;
+  top: 1rem;
+  align-self: flex-start;
+  max-height: calc(100vh - 2rem);
+  margin: 0.5rem 1.5rem 1.5rem 0;
+  padding: 1.5rem;
+  border-radius: var(--radius-surface);
+  background: var(--bg);
+  border: 1px solid var(--surface-border);
+  box-shadow: var(--surface-shadow);
+}
+
+.selection-panel .icon-button--quiet {
+  border-radius: var(--radius-pill);
+  background: var(--panel);
+}
+
+.selection-panel .icon-button--quiet:hover:not(:disabled) {
+  background: #0d4a75;
+}
+
+@media (max-width: 900px) {
+  .selection-panel {
+    position: static;
+    max-height: none;
+    max-width: none;
+    margin: 0 1rem 1rem;
+  }
+}
+
+.selection-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.selection-panel-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.selection-panel-kicker {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.selection-panel-id {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: "Space Mono", monospace;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--accent-hover);
+  word-break: break-all;
+}
+
+.selection-panel-summary {
+  margin: 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.selection-panel-summary strong {
+  color: var(--text);
+}
+
+.selection-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  /* min-height 0 lets the list shrink inside the window-high panel and
+     scroll, instead of pushing the buttons out of view. */
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.selection-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 1rem;
+  border-radius: var(--radius-inner);
+  background: var(--panel);
+}
+
+.selection-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.selection-item-name {
+  flex-grow: 1;
+  font-size: 0.875rem;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.selection-item-meta {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.selection-item-topic {
+  font-family: "Space Mono", monospace;
+  font-size: 0.75rem;
+  color: var(--tint-blue);
+  word-break: break-all;
+}
+
+.selection-panel-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.selection-panel-actions .button {
+  flex: 1;
+}
+
+.pill {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.pill--wildcard {
+  background: rgba(171, 255, 136, 0.15);
+  color: var(--accent-hover);
+}
+
+/* Q / TE / DS - same colors as the diagram's SVG badges (SankeyNode). */
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.625rem;
+  height: 1.375rem;
+  padding: 0 4px;
+  border-radius: 6px;
+  font: 700 0.6875rem "Figtree", system-ui, sans-serif;
   flex-shrink: 0;
+}
+
+.type-badge--q {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.type-badge--te {
+  background: var(--tint-blue);
+  color: var(--bg);
+}
+
+.type-badge--ds {
+  border: 1.5px solid var(--text);
+  color: var(--text);
 }

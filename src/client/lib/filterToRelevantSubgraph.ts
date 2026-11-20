@@ -1,6 +1,20 @@
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
 
-function buildAdjacency(edges: SankeyEdge[]): {
+export interface RelevantSubgraphOptions {
+  /**
+   * Also walk implied wildcard-coverage edges upwards. Off by default: the
+   * ancestor view then answers "what did this endpoint literally subscribe
+   * to". On, it answers "which topics actually reach this endpoint" - what
+   * the data-flow view highlights on hover/selection, so a "retail/orders/>"
+   * queue lights up "retail/orders/created" too.
+   */
+  includeImpliedAncestors?: boolean;
+}
+
+function buildAdjacency(
+  edges: SankeyEdge[],
+  includeImpliedAncestors: boolean,
+): {
   outgoing: Map<string, string[]>;
   incoming: Map<string, string[]>;
 } {
@@ -17,7 +31,7 @@ function buildAdjacency(edges: SankeyEdge[]): {
     // queue should show its real subscriptions only. Implied edges still
     // count as outgoing above, so clicking the covered topic itself still
     // shows the queue that reaches it via the wildcard.
-    if (edge.implied) continue;
+    if (edge.implied && !includeImpliedAncestors) continue;
     if (!incoming.has(edge.target)) incoming.set(edge.target, []);
     incoming.get(edge.target)!.push(edge.source);
   }
@@ -61,13 +75,14 @@ function collectReachable(start: string, adjacency: Map<string, string[]>): Set<
 export function filterToRelevantSubgraph(
   edges: SankeyEdge[],
   selectedNodeId: string,
+  options: RelevantSubgraphOptions = {},
 ): SankeyEdge[] {
   const nodeExists = edges.some(
     (edge) => edge.source === selectedNodeId || edge.target === selectedNodeId,
   );
   if (!nodeExists) return [];
 
-  const { outgoing, incoming } = buildAdjacency(edges);
+  const { outgoing, incoming } = buildAdjacency(edges, options.includeImpliedAncestors ?? false);
   const descendants = collectReachable(selectedNodeId, outgoing);
   const ancestors = collectReachable(selectedNodeId, incoming);
   const relevantNodes = new Set([...descendants, ...ancestors]);
