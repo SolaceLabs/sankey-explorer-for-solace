@@ -43,6 +43,10 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- Endpoint node ids are produced and read from one table (`shared/endpointNodeId.ts`):
+  `toSankeyEdges` builds "Queue: X" style ids from it, and the client's type checks, display
+  names, direct-subscriber filter and colors read the type back from it instead of repeating
+  the "Queue:" / "Topic Endpoint:" / "Direct Subscriber:" prefixes in five places.
 - UI redesign (dark Solace look): brand block "Sankey Explorer / for Solace", Message VPNs as
   one chip with a panel holding "Manage" and "Disconnect all" (replaces three large header
   buttons), refresh as an icon button, round icon-only SVG export in the top bar right of

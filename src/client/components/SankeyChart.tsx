@@ -8,7 +8,7 @@ import { filterToRelevantSubgraph } from "../lib/filterToRelevantSubgraph";
 import { describeSelection } from "../lib/describeSelection";
 import { columnHeadings } from "../lib/columnHeadings";
 import type { EndpointBrokerColors } from "../lib/buildEndpointBrokerColors";
-import { isEndpointNode } from "../lib/nodeKind";
+import { endpointTypeOf, isEndpointNode } from "../lib/nodeKind";
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
 import { DiagramToolbar } from "./DiagramToolbar";
 import { DiagramSearch } from "./DiagramSearch";
@@ -55,8 +55,9 @@ function nodeColor(id: string, brokerColors: EndpointBrokerColors | undefined): 
     if (color) return color;
   }
 
-  if (id.startsWith("Queue:")) return TYPE_COLORS.queue;
-  if (id.startsWith("Topic Endpoint:")) return TYPE_COLORS.topicEndpoint;
+  const type = endpointTypeOf(id);
+  if (type === "queue") return TYPE_COLORS.queue;
+  if (type === "topic-endpoint") return TYPE_COLORS.topicEndpoint;
   return TYPE_COLORS.directSubscriber;
 }
 

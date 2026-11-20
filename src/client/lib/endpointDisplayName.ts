@@ -1,6 +1,5 @@
+import { stripEndpointTypePrefix } from "../../shared/endpointNodeId";
 import { isEndpointNode } from "./nodeKind";
-
-const TYPE_PREFIXES = ["Queue: ", "Topic Endpoint: ", "Direct Subscriber: "];
 
 /**
  * Strips the type prefix ("Queue: "/"Topic Endpoint: ") and any trailing
@@ -12,14 +11,5 @@ const TYPE_PREFIXES = ["Queue: ", "Topic Endpoint: ", "Direct Subscriber: "];
  */
 export function endpointDisplayName(id: string): string {
   if (!isEndpointNode(id)) return id;
-
-  let name = id;
-  for (const prefix of TYPE_PREFIXES) {
-    if (name.startsWith(prefix)) {
-      name = name.slice(prefix.length);
-      break;
-    }
-  }
-
-  return name.replace(/ \([^)]*\)$/, "");
+  return stripEndpointTypePrefix(id).replace(/ \([^)]*\)$/, "");
 }
