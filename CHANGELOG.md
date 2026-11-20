@@ -43,6 +43,8 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- One tested `countLabel` ("1 endpoint", "7 endpoints") replaces the two identical `plural`
+  helpers in `DiagramToolbar` and `SelectionPanel`.
 - `SankeyChart` is split by concern (300 to 200 lines): the flows and their gradient render in
   `SankeyLinks` with a typed link path (no more `link as never`), the selection and its
   invalidation live in `useDiagramSelection`, the canvas width in `useElementWidth`, and the
