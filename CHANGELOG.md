@@ -43,6 +43,11 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- `SankeyChart` is split by concern (300 to 200 lines): the flows and their gradient render in
+  `SankeyLinks` with a typed link path (no more `link as never`), the selection and its
+  invalidation live in `useDiagramSelection`, the canvas width in `useElementWidth`, and the
+  flow highlight (`flowHighlight`, `flowThrough`) and endpoint sub-lines (`endpointSubLines`)
+  are tested `lib` functions.
 - Diagram colors live in one module (`lib/diagramColors.ts`): named brand colors, the role each
   plays (topic, flow, Gradient 16, selection, labels, endpoint types, badges, broker palette,
   export background) and `nodeFillColor`, instead of hex values spread over `SankeyChart`,
