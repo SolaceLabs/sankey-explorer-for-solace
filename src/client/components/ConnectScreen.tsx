@@ -89,6 +89,7 @@ export function ConnectScreen({
   }
 
   async function handleRemove(id: string) {
+    setError(null);
     setRemovingId(id);
     try {
       const updated = await api.disconnectOne(id);
@@ -98,6 +99,8 @@ export function ConnectScreen({
         next.delete(id);
         onBrokerConfigsChanged(next);
       }
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not remove the connection"));
     } finally {
       setRemovingId(null);
     }

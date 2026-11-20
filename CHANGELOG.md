@@ -106,6 +106,8 @@ All notable changes to this project are documented here
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
 
 ### Fixed
+- Removing a Message VPN connection that the server refuses now shows the server's error on
+  the connect screen instead of failing silently with an unhandled promise rejection.
 - A failed refresh no longer closes the selection panel: the diagram inputs are derived once per
   endpoints reply (`lib/diagramData.ts`) instead of on every render of `App`, which also stops
   the layout from being recomputed on unrelated re-renders.

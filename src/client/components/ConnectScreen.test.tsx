@@ -258,4 +258,17 @@ describe("ConnectScreen - managing existing connections", () => {
     expect(onBrokersChanged).toHaveBeenCalledWith([]);
     expect(onBrokerConfigsChanged).toHaveBeenCalledWith(new Map());
   });
+
+  it("shows the server's error and keeps the broker when removing it fails", async () => {
+    vi.mocked(api.disconnectOne).mockRejectedValue(new ApiRequestError("Session expired"));
+    const onBrokersChanged = vi.fn();
+    const user = userEvent.setup();
+
+    renderConnectScreen({ brokers: [brokerA], onBrokersChanged });
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+
+    expect(await screen.findByText("Session expired")).toBeInTheDocument();
+    expect(onBrokersChanged).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Remove" })).toBeEnabled();
+  });
 });
