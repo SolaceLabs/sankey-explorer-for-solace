@@ -28,11 +28,18 @@ that session - never written to disk, never sent anywhere but your broker.
   more specific topic it actually receives, not just its own literal
   string (the "View" toggle switches to literal mode)
 - **Multiple brokers/VPNs at once**, combined into one diagram, color-coded
-- **Click any node or link** to filter down to just that subscription chain
+- **Hover any node or link** to highlight its whole flow - in "Data flow"
+  view a wildcard endpoint's flow includes every topic its wildcard covers
+- **Click it** (or find it with the search, ⌘K / Ctrl K) to open a detail
+  panel: which endpoints a topic reaches, and whether through their own
+  subscription or a wider wildcard. "Show only this" then filters the
+  diagram down to that chain
+- **Endpoint types at a glance** - Q (queue), TE (topic endpoint) and DS
+  (direct subscriber) badges next to every endpoint
 - **Export** the diagram as SVG, or a broker connection as YAML (saved as
   plaintext locally - handle it like a password file)
-- Flags queues/topic-endpoints with zero subscriptions instead of quietly
-  dropping them
+- Counts queues/topic-endpoints with zero subscriptions in the toolbar
+  (hover for their names) instead of quietly dropping them
 
 ## How it works
 

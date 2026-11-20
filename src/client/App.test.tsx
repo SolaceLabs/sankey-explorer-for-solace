@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import { api, ApiRequestError } from "./api/client";
@@ -97,17 +97,39 @@ describe("App - partial broker failures", () => {
 });
 
 describe("App - topbar actions once connected", () => {
-  it("shows one badge per connected broker", async () => {
+  it("summarizes the connected brokers in one chip and lists each one when opened", async () => {
     vi.mocked(api.getSession).mockResolvedValue(
       session({ brokers: [connectedBroker, { ...connectedBroker, id: "2", label: "second" }] }),
     );
     vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+    const user = userEvent.setup();
 
     render(<App />);
     await screen.findByText("orders-q");
 
+    const chip = screen.getByRole("button", { name: "Message VPNs: 2 Message VPNs" });
+    expect(chip).toHaveAttribute("aria-expanded", "false");
+    await user.click(chip);
+
+    expect(chip).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("default")).toBeInTheDocument();
     expect(screen.getByText("second")).toBeInTheDocument();
+  });
+
+  it("closes the Message VPN panel on Escape and returns focus to the chip", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByText("orders-q");
+
+    const chip = screen.getByRole("button", { name: "Message VPNs: default" });
+    await user.click(chip);
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("button", { name: "Manage Message VPNs" })).not.toBeInTheDocument();
+    expect(chip).toHaveFocus();
   });
 
   it("'Manage Message VPNs' switches back to the connect screen", async () => {
@@ -118,6 +140,7 @@ describe("App - topbar actions once connected", () => {
     render(<App />);
     await screen.findByText("orders-q");
 
+    await user.click(screen.getByRole("button", { name: "Message VPNs: default" }));
     await user.click(screen.getByRole("button", { name: "Manage Message VPNs" }));
 
     expect(await screen.findByText("Manage Message VPN connections")).toBeInTheDocument();
@@ -132,10 +155,27 @@ describe("App - topbar actions once connected", () => {
     render(<App />);
     await screen.findByText("orders-q");
 
+    await user.click(screen.getByRole("button", { name: "Message VPNs: default" }));
     await user.click(screen.getByRole("button", { name: "Disconnect all Message VPNs" }));
 
     expect(await screen.findByText("Connect to Message VPN")).toBeInTheDocument();
     expect(api.disconnectAll).toHaveBeenCalledOnce();
+  });
+
+  it("puts the diagram search into the top bar", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+
+    render(<App />);
+    await screen.findByText("orders-q");
+
+    const header = screen.getByRole("banner");
+    expect(within(header).getByRole("combobox", { name: "Find topic or endpoint" })).toBeInTheDocument();
+    expect(within(header).getByRole("heading", { name: "Sankey Explorer" })).toBeInTheDocument();
+    // Export sits in the top bar, to the right of Refresh.
+    const refresh = within(header).getByRole("button", { name: "Refresh" });
+    const exportButton = within(header).getByRole("button", { name: "Export SVG" });
+    expect(refresh.compareDocumentPosition(exportButton) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("'Refresh' reloads endpoints and shows a banner if it fails", async () => {

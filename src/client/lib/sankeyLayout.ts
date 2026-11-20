@@ -4,7 +4,7 @@ import { removeCycles } from "./removeCycles";
 import { buildQueueSortKeys } from "./buildQueueSortKeys";
 import { nodeDisplayLabel } from "./nodeDisplayLabel";
 import { endpointDisplayName } from "./endpointDisplayName";
-import { endpointTypeLabel, isEndpointNode } from "./nodeKind";
+import { isEndpointNode } from "./nodeKind";
 
 export type SortMode = "topic" | "queue" | "owner" | "messageVpn" | "crossing";
 
@@ -15,6 +15,9 @@ const MAIN_FONT_SIZE = 12;
 const SUB_FONT_SIZE = 10; // type/owner/vpn@host sub-labels render smaller
 const CHAR_WIDTH_RATIO = 0.65;
 const LABEL_GAP_PX = 14; // gap between the bar and the start of the text
+// Endpoint labels start after the Q / TE / DS type badge (see SankeyNode):
+// badge width + the gap after it.
+const ENDPOINT_BADGE_SPACE_PX = 34;
 
 function estimateWidth(text: string, fontSize: number): number {
   return text.length * fontSize * CHAR_WIDTH_RATIO + LABEL_GAP_PX;
@@ -29,10 +32,11 @@ function estimateWidth(text: string, fontSize: number): number {
  * "Queue: RDP_to_Mobiles..." down to ~18 characters. Now sized to the
  * longest label actually in this dataset instead of a guessed constant.
  *
- * Endpoint nodes can render up to four stacked lines (name, type, owner,
- * vpn@host - see SankeyChart), any of which might be the widest, so all
- * four are measured. Non-endpoint (topic hierarchy) nodes only ever show
- * one line (their last path segment).
+ * Endpoint nodes render a type badge followed by up to three stacked
+ * lines (name, owner, vpn@host - see SankeyNode), any of which might be
+ * the widest, so all three are measured and the badge is added on top.
+ * Non-endpoint (topic hierarchy) nodes only ever show one line (their
+ * last path segment).
  */
 function computeLabelMargins(
   nodeIds: string[],
@@ -47,16 +51,13 @@ function computeLabelMargins(
     if (isEndpointNode(id)) {
       const lineWidths = [estimateWidth(endpointDisplayName(id), MAIN_FONT_SIZE)];
 
-      const type = endpointTypeLabel(id);
-      if (type) lineWidths.push(estimateWidth(type, SUB_FONT_SIZE));
-
       const owner = endpointOwners?.get(id);
       if (owner) lineWidths.push(estimateWidth(owner, SUB_FONT_SIZE));
 
       const vpnHost = endpointVpnHost?.get(id);
       if (vpnHost) lineWidths.push(estimateWidth(vpnHost, SUB_FONT_SIZE));
 
-      maxRightWidth = Math.max(maxRightWidth, ...lineWidths);
+      maxRightWidth = Math.max(maxRightWidth, Math.max(...lineWidths) + ENDPOINT_BADGE_SPACE_PX);
     } else {
       maxLeftWidth = Math.max(
         maxLeftWidth,

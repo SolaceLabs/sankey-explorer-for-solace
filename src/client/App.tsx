@@ -3,6 +3,7 @@ import { api, ApiRequestError } from "./api/client";
 import { LoginScreen } from "./components/LoginScreen";
 import { ConnectScreen } from "./components/ConnectScreen";
 import { SankeyChart } from "./components/SankeyChart";
+import { VpnMenu } from "./components/VpnMenu";
 import { toSankeyEdges } from "../shared/toSankeyEdges";
 import { buildEndpointOwners } from "./lib/buildEndpointOwners";
 import { buildBrokerColorPalette, buildEndpointBrokerColors } from "./lib/buildEndpointBrokerColors";
@@ -29,6 +30,10 @@ function App() {
   // here (rather than local to ConnectScreen) so it survives navigating to
   // the diagram view and back. See ConnectScreenProps for details.
   const [brokerConfigs, setBrokerConfigs] = useState<Map<string, BrokerConfigEntry>>(new Map());
+  // The header element the diagram search is portaled into (callback ref,
+  // so the chart re-renders once it exists).
+  const [searchSlot, setSearchSlot] = useState<HTMLDivElement | null>(null);
+  const [exportSlot, setExportSlot] = useState<HTMLDivElement | null>(null);
 
   const loadEndpoints = useCallback(async () => {
     setView({ kind: "loading" });
@@ -107,39 +112,64 @@ function App() {
     [session?.brokers],
   );
 
+  const unsubscribedEndpoints = useMemo(
+    () =>
+      view.kind === "ready"
+        ? view.endpoints.filter((e) => e.subscriptions.length === 0).map((e) => e.name)
+        : [],
+    [view],
+  );
+  const hasBrokers = Boolean(session && session.brokers.length > 0);
+
   return (
     <div className="app">
       <header className="topbar">
-        <h1 className="eyebrow">Sankey Explorer for Solace</h1>
+        <div className="brand">
+          <img className="brand-icon" src="/sankey-explorer-app-icon.svg" alt="" width={34} height={34} />
+          <div className="brand-text">
+            <h1 className="brand-title">Sankey Explorer</h1>
+            <span className="brand-subtitle">for Solace</span>
+          </div>
+        </div>
+        {/* SankeyChart portals its search in here - see its searchSlot prop. */}
+        <div className="topbar-search" ref={setSearchSlot} />
         <div className="topbar-actions">
-          {session && session.brokers.length > 0 && (
+          {session && hasBrokers && (
             <>
-              <div className="broker-badges">
-                {session.brokers.map((b) => (
-                  <span
-                    key={b.id}
-                    className="badge broker-badge"
-                    style={{ borderColor: brokerColors.get(b.label) }}
-                  >
-                    <span
-                      className="broker-badge-dot"
-                      style={{ background: brokerColors.get(b.label) }}
-                    />
-                    {b.label}
-                  </span>
-                ))}
-              </div>
-              <button onClick={() => setView({ kind: "connect" })}>
-                Manage Message VPNs
+              <VpnMenu
+                brokers={session.brokers}
+                colors={brokerColors}
+                onManage={() => setView({ kind: "connect" })}
+                onDisconnectAll={handleDisconnectAll}
+              />
+              <button
+                type="button"
+                className="icon-button icon-button--primary"
+                aria-label="Refresh"
+                title="Refresh"
+                aria-busy={isRefreshing}
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+              >
+                <svg
+                  className={isRefreshing ? "icon icon--spinning" : "icon"}
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M20 11a8 8 0 1 0-2.3 5.7" />
+                  <path d="M20 4v7h-7" />
+                </svg>
               </button>
-              <button onClick={handleRefresh} disabled={isRefreshing}>
-                {isRefreshing ? "Refreshing..." : "Refresh"}
-              </button>
-              <button onClick={handleDisconnectAll}>Disconnect all Message VPNs</button>
+              {/* SankeyChart portals its export button in here (exportSlot). */}
+              <div className="topbar-export" ref={setExportSlot} />
             </>
           )}
           {session?.authRequired && session.authenticated && (
-            <button onClick={handleLogout}>Logout</button>
+            <button type="button" className="button button--outline" onClick={handleLogout}>
+              Logout
+            </button>
           )}
         </div>
       </header>
@@ -179,6 +209,9 @@ function App() {
               endpointBrokerColors={buildEndpointBrokerColors(view.endpoints)}
               endpointBrokerLabels={buildEndpointBrokerLabels(view.endpoints)}
               endpointVpnHost={buildEndpointVpnHost(view.endpoints)}
+              unsubscribedEndpoints={unsubscribedEndpoints}
+              searchSlot={searchSlot}
+              exportSlot={exportSlot}
             />
           </div>
         )}

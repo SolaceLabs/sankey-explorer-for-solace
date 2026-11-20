@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { endpointTypeLabel, isEndpointNode } from "./nodeKind";
+import { endpointTypeCode, endpointTypeLabel, isEndpointNode } from "./nodeKind";
 
 describe("isEndpointNode", () => {
   it("recognizes queue, topic-endpoint and direct-subscriber ids", () => {
@@ -23,5 +23,21 @@ describe("endpointTypeLabel", () => {
 
   it("still works when a broker-disambiguation suffix is present", () => {
     expect(endpointTypeLabel("Queue: orders-q (EU-Broker)")).toBe("Queue");
+  });
+});
+
+describe("endpointTypeCode", () => {
+  it("returns the short badge code for each endpoint type", () => {
+    expect(endpointTypeCode("Queue: orders-q")).toBe("Q");
+    expect(endpointTypeCode("Topic Endpoint: te-orders")).toBe("TE");
+    expect(endpointTypeCode("Direct Subscriber: my-app-1")).toBe("DS");
+  });
+
+  it("returns null for topic hierarchy ids", () => {
+    expect(endpointTypeCode("acme/sales")).toBeNull();
+  });
+
+  it("ignores a broker-disambiguation suffix", () => {
+    expect(endpointTypeCode("Topic Endpoint: te-orders (EU-Broker)")).toBe("TE");
   });
 });

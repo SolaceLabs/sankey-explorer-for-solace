@@ -186,19 +186,30 @@ export function ConnectScreen({
 
         <form onSubmit={handleSubmit} className="connect-form">
           {!hasBrokers && (
-            <p className="hint">
-              The broker's SEMP management host, e.g. http://broker-host:8080
-              (SEMP v2 - no path needed). A read-only user is enough.
-              Connecting to several message VPNs (maybe across multiple
-              brokers)? Add each one here - they'll all show up combined in
-              the diagram, color-coded by message VPN.
-              {" "}Pre-filled with <code>host.docker.internal</code> since
-              that's what reaches a broker on your own machine from inside
-              this app's own Docker container (the quickstart way of
-              running it) - running this app locally instead (<code>npm run dev</code>),
-              or a broker on a different host entirely? Change it to{" "}
-              <code>localhost</code> or the broker's real address.
-            </p>
+            <>
+              <p className="hint">
+                The broker's SEMP management host, e.g. http://broker-host:8080
+                (SEMP v2 - no path needed). A read-only user is enough.
+              </p>
+              {/* The rest only matters in some setups - folded away so the
+                  form itself stays the first thing on the card. */}
+              <details>
+                <summary>Several Message VPNs, or which host to enter?</summary>
+                <p>
+                  Connecting to several message VPNs (maybe across multiple
+                  brokers)? Add each one here - they'll all show up combined in
+                  the diagram, color-coded by message VPN.
+                </p>
+                <p>
+                  Pre-filled with <code>host.docker.internal</code> since
+                  that's what reaches a broker on your own machine from inside
+                  this app's own Docker container (the quickstart way of
+                  running it) - running this app locally instead (<code>npm run dev</code>),
+                  or a broker on a different host entirely? Change it to{" "}
+                  <code>localhost</code> or the broker's real address.
+                </p>
+              </details>
+            </>
           )}
           <label>
             SEMP host

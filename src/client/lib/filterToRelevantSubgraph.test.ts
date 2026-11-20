@@ -115,6 +115,39 @@ describe("filterToRelevantSubgraph - implied wildcard-coverage edges", () => {
   });
 });
 
+describe("filterToRelevantSubgraph - includeImpliedAncestors (data flow highlighting)", () => {
+  const wildcardEdges: SankeyEdge[] = [
+    { source: "acme/sales", target: "acme/sales/>", value: 1 },
+    { source: "acme/sales/>", target: "Queue: all-sales-q", value: 1 },
+    { source: "acme/sales", target: "acme/sales/orders", value: 1 },
+    { source: "acme/sales/orders", target: "Topic Endpoint: te-orders", value: 1 },
+    { source: "acme/sales/orders", target: "Queue: all-sales-q", value: 1, implied: true },
+  ];
+
+  it("follows implied edges upwards, so a wildcard queue shows every topic it actually receives", () => {
+    const result = filterToRelevantSubgraph(wildcardEdges, "Queue: all-sales-q", {
+      includeImpliedAncestors: true,
+    });
+
+    expect(result).toContainEqual({
+      source: "acme/sales/orders",
+      target: "Queue: all-sales-q",
+      value: 1,
+      implied: true,
+    });
+    expect(result).toContainEqual({ source: "acme/sales", target: "acme/sales/orders", value: 1 });
+    expect(result).toContainEqual({ source: "acme/sales/>", target: "Queue: all-sales-q", value: 1 });
+    // The other endpoint of the covered topic is not part of this queue's flow.
+    expect(result.some((e) => e.target === "Topic Endpoint: te-orders")).toBe(false);
+  });
+
+  it("changes nothing for a topic node", () => {
+    expect(
+      filterToRelevantSubgraph(wildcardEdges, "acme/sales/orders", { includeImpliedAncestors: true }),
+    ).toEqual(filterToRelevantSubgraph(wildcardEdges, "acme/sales/orders"));
+  });
+});
+
 describe("filterToRelevantSubgraph as the anchor for edge hover/click", () => {
   it("calling it with a link's TARGET gives the exact same result as clicking/hovering that link directly would need", () => {
     // A link between "acme/sales" and "acme/sales/orders" should highlight/
