@@ -4,11 +4,8 @@ import { LoginScreen } from "./components/LoginScreen";
 import { ConnectScreen } from "./components/ConnectScreen";
 import { SankeyChart } from "./components/SankeyChart";
 import { VpnMenu } from "./components/VpnMenu";
-import { toSankeyEdges } from "../shared/toSankeyEdges";
-import { buildEndpointOwners } from "./lib/buildEndpointOwners";
-import { buildBrokerColorPalette, buildEndpointBrokerColors } from "./lib/buildEndpointBrokerColors";
-import { buildEndpointBrokerLabels } from "./lib/buildEndpointBrokerLabels";
-import { buildEndpointVpnHost } from "./lib/buildEndpointVpnHost";
+import { buildBrokerColorPalette } from "./lib/buildEndpointBrokerColors";
+import { buildDiagramData } from "./lib/diagramData";
 import type { BrokerConfigEntry } from "./lib/brokerConfig";
 import type { BrokerConnectionStatus, BrokerQueryError, EndpointInfo, SessionInfo } from "./types";
 import "./index.css";
@@ -112,13 +109,11 @@ function App() {
     [session?.brokers],
   );
 
-  const unsubscribedEndpoints = useMemo(
-    () =>
-      view.kind === "ready"
-        ? view.endpoints.filter((e) => e.subscriptions.length === 0).map((e) => e.name)
-        : [],
-    [view],
-  );
+  // One derivation per endpoints reply, not per render: the chart keys its
+  // selection on these references (a failed refresh re-renders App but must
+  // not drop the selection).
+  const readyEndpoints = view.kind === "ready" ? view.endpoints : null;
+  const diagramData = useMemo(() => readyEndpoints && buildDiagramData(readyEndpoints), [readyEndpoints]);
   const hasBrokers = Boolean(session && session.brokers.length > 0);
 
   return (
@@ -194,7 +189,7 @@ function App() {
             onDone={loadEndpoints}
           />
         )}
-        {view.kind === "ready" && (
+        {view.kind === "ready" && diagramData && (
           <div className="ready-view">
             {refreshError && <p className="error banner">{refreshError}</p>}
             {view.errors.length > 0 && (
@@ -203,16 +198,7 @@ function App() {
                 {view.errors.map((e) => `${e.brokerLabel} (${e.message})`).join("; ")}
               </p>
             )}
-            <SankeyChart
-              edges={toSankeyEdges(view.endpoints)}
-              endpointOwners={buildEndpointOwners(view.endpoints)}
-              endpointBrokerColors={buildEndpointBrokerColors(view.endpoints)}
-              endpointBrokerLabels={buildEndpointBrokerLabels(view.endpoints)}
-              endpointVpnHost={buildEndpointVpnHost(view.endpoints)}
-              unsubscribedEndpoints={unsubscribedEndpoints}
-              searchSlot={searchSlot}
-              exportSlot={exportSlot}
-            />
+            <SankeyChart {...diagramData} searchSlot={searchSlot} exportSlot={exportSlot} />
           </div>
         )}
       </main>

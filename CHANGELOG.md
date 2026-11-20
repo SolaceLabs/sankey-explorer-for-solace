@@ -100,6 +100,9 @@ All notable changes to this project are documented here
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
 
 ### Fixed
+- A failed refresh no longer closes the selection panel: the diagram inputs are derived once per
+  endpoints reply (`lib/diagramData.ts`) instead of on every render of `App`, which also stops
+  the layout from being recomputed on unrelated re-renders.
 - The empty diagram no longer points at a source file that does not exist
   (`backend/src/semp/queries.ts`); it tells the user to refresh once an endpoint subscribes.
 - Dependency advisories that failed the `npm audit` gate: `vitest` / `@vitest/coverage-v8`
