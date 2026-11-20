@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { api, apiErrorMessage } from "../api/client";
 import { parseBrokerConfig, serializeBrokerConfig } from "../lib/brokerConfig";
 import type { BrokerConfigEntry } from "../lib/brokerConfig";
+import { downloadFile } from "../lib/downloadFile";
 import type { BrokerConnectionStatus } from "../types";
 
 interface ConnectScreenProps {
@@ -106,14 +107,7 @@ export function ConnectScreen({
     const entries = brokers
       .map((b) => brokerConfigs.get(b.id))
       .filter((entry): entry is BrokerConfigEntry => entry !== undefined);
-    const yamlText = serializeBrokerConfig(entries);
-    const blob = new Blob([yamlText], { type: "application/x-yaml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "broker-config.yaml";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(serializeBrokerConfig(entries), "application/x-yaml", "broker-config.yaml");
   }
 
   function handleImportClick() {

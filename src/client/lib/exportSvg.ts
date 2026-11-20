@@ -1,4 +1,5 @@
 import { DIAGRAM_COLORS } from "./diagramColors";
+import { downloadFile } from "./downloadFile";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -28,10 +29,5 @@ export function downloadSvg(
 
   const source =
     '<?xml version="1.0" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone);
-  const url = URL.createObjectURL(new Blob([source], { type: "image/svg+xml" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadFile(source, "image/svg+xml", fileName);
 }

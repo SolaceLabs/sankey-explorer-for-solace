@@ -43,6 +43,7 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- File downloads (diagram SVG, broker config YAML) share one tested `lib/downloadFile.ts`.
 - The app header is its own `TopBar` component (brand, search slot, Message VPN menu, refresh,
   export slot, logout); `App` keeps only session and view state.
 - `apiErrorMessage(err, fallback)` in `api/client.ts` replaces six inline
