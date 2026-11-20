@@ -8,6 +8,15 @@ export type {
   EndpointInfo,
   EndpointsResponse,
 } from "../shared/types.js";
+export type {
+  ConsumerFlow,
+  ConsumersResponse,
+  DirectSubscriberMetrics,
+  EndpointMetrics,
+  MetricsResponse,
+  RateSample,
+  SpooledEndpointMetrics,
+} from "../shared/metrics.js";
 
 import type { BrokerConnectionStatus } from "../shared/types.js";
 

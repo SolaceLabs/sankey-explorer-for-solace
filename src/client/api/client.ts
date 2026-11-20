@@ -1,4 +1,12 @@
-import type { ApiError, BrokerConnectionStatus, EndpointsResponse, SessionInfo } from "../types";
+import type {
+  ApiError,
+  BrokerConnectionStatus,
+  ConsumersResponse,
+  EndpointsResponse,
+  MetricsResponse,
+  SessionInfo,
+  SpooledEndpointMetrics,
+} from "../types";
 
 export class ApiRequestError extends Error {}
 
@@ -68,4 +76,20 @@ export const api = {
     request<BrokerConnectionStatus[]>("/connection", { method: "DELETE" }),
 
   getEndpoints: () => request<EndpointsResponse>("/endpoints"),
+
+  /** One live telemetry sample. `signal` lets the poller abort a request it no longer needs. */
+  getMetrics: (signal?: AbortSignal) => request<MetricsResponse>("/metrics", { signal }),
+
+  /** Consumer flows bound to one queue or topic endpoint (on demand, not polled). */
+  getConsumers: (endpoint: ConsumerLookup, signal?: AbortSignal) => {
+    const query = new URLSearchParams({ broker: endpoint.brokerLabel, type: endpoint.type, name: endpoint.name });
+    return request<ConsumersResponse>(`/metrics/consumers?${query.toString()}`, { signal });
+  },
 };
+
+/** Which endpoint's consumers to list - the same identity the metrics carry. */
+export interface ConsumerLookup {
+  brokerLabel: string;
+  type: SpooledEndpointMetrics["type"];
+  name: string;
+}

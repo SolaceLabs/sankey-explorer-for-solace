@@ -13,6 +13,13 @@ All notable changes to this project are documented here
   `/api/endpoints`. `GET /api/metrics/consumers` lists the consumer flows (`txFlows`) of one
   queue or topic endpoint on demand. Missing or malformed SEMP fields come back as `null`,
   never as a fake `0`.
+- Client-side live metrics model: `buildEndpointMetricsMap` maps samples onto diagram node ids
+  (same broker-suffix rule as the nodes), `classifyEndpointActivity` rates each endpoint as
+  unknown / idle / active / backlog (spool growing since the previous sample, at least 80% of its
+  quota, or holding messages with nothing going out), `formatMetrics` renders bounded summaries.
+  `useMetricsPolling` (pure `metricsPollingReducer` inside) polls with a `setTimeout` chain, at
+  most one request in flight, aborts on pause/reset/unmount, keeps the last good sample on
+  errors and pauses and clears itself when its `resetKey` (the loaded configuration) changes.
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
 - Dependabot auto-merge workflow: GitHub's native auto-merge (squash) is enabled for patch and

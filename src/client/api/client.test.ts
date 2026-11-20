@@ -116,6 +116,29 @@ describe("api.getEndpoints", () => {
   });
 });
 
+describe("api.getMetrics", () => {
+  it("GETs /api/metrics and passes the abort signal through", async () => {
+    const fetchMock = vi.mocked(fetch).mockResolvedValue(jsonResponse({ sampledAt: 1, metrics: [], errors: [] }));
+    const controller = new AbortController();
+
+    await api.getMetrics(controller.signal);
+
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/metrics");
+    expect(init?.signal).toBe(controller.signal);
+  });
+});
+
+describe("api.getConsumers", () => {
+  it("encodes broker, type and name as query parameters", async () => {
+    const fetchMock = vi.mocked(fetch).mockResolvedValue(jsonResponse({ flows: [] }));
+
+    await api.getConsumers({ brokerLabel: "EU Broker", type: "queue", name: "a/b&c" });
+
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/metrics/consumers?broker=EU+Broker&type=queue&name=a%2Fb%26c");
+  });
+});
+
 describe("apiErrorMessage", () => {
   it("passes the server's message through for API errors", () => {
     expect(apiErrorMessage(new ApiRequestError("Invalid credentials"), "Login failed")).toBe("Invalid credentials");
