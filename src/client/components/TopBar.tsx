@@ -15,8 +15,8 @@ interface TopBarProps {
    * Callback refs for the elements SankeyChart portals its search and
    * export button into (see its searchSlot / exportSlot props).
    */
-  searchSlotRef: (element: HTMLDivElement | null) => void;
-  exportSlotRef: (element: HTMLDivElement | null) => void;
+  onSearchSlotMount: (element: HTMLDivElement | null) => void;
+  onExportSlotMount: (element: HTMLDivElement | null) => void;
 }
 
 function RefreshButton({ isRefreshing, onRefresh }: { isRefreshing: boolean; onRefresh: () => void }) {
@@ -39,8 +39,18 @@ function RefreshButton({ isRefreshing, onRefresh }: { isRefreshing: boolean; onR
 }
 
 /** The app header: brand, the diagram search slot and the session actions. */
-export function TopBar(props: TopBarProps) {
-  const { brokers, isRefreshing } = props;
+export function TopBar({
+  brokers,
+  brokerColors,
+  showLogout,
+  isRefreshing,
+  onRefresh,
+  onManageBrokers,
+  onDisconnectAll,
+  onLogout,
+  onSearchSlotMount,
+  onExportSlotMount,
+}: TopBarProps) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -50,22 +60,22 @@ export function TopBar(props: TopBarProps) {
           <span className="brand-subtitle">for Solace</span>
         </div>
       </div>
-      <div className="topbar-search" ref={props.searchSlotRef} />
+      <div className="topbar-search" ref={onSearchSlotMount} />
       <div className="topbar-actions">
         {brokers.length > 0 && (
           <>
             <VpnMenu
               brokers={brokers}
-              colors={props.brokerColors}
-              onManage={props.onManageBrokers}
-              onDisconnectAll={props.onDisconnectAll}
+              colors={brokerColors}
+              onManage={onManageBrokers}
+              onDisconnectAll={onDisconnectAll}
             />
-            <RefreshButton isRefreshing={isRefreshing} onRefresh={props.onRefresh} />
-            <div className="topbar-export" ref={props.exportSlotRef} />
+            <RefreshButton isRefreshing={isRefreshing} onRefresh={onRefresh} />
+            <div className="topbar-export" ref={onExportSlotMount} />
           </>
         )}
-        {props.showLogout && (
-          <button type="button" className="button button--outline" onClick={props.onLogout}>
+        {showLogout && (
+          <button type="button" className="button button--outline" onClick={onLogout}>
             Logout
           </button>
         )}

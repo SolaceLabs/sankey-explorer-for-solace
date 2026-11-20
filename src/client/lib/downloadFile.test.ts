@@ -11,16 +11,14 @@ describe("downloadFile", () => {
     const createObjectURL = vi.fn().mockReturnValue("blob:mock-url");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
-    let clicked: HTMLAnchorElement | undefined;
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
-      clicked = this;
-    });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     downloadFile("a: 1\n", "application/x-yaml", "config.yaml");
 
     const blob = createObjectURL.mock.calls[0]![0] as Blob;
     expect(blob.type).toBe("application/x-yaml");
     expect(await blob.text()).toBe("a: 1\n");
+    const clicked = click.mock.contexts[0] as HTMLAnchorElement | undefined;
     expect(clicked?.download).toBe("config.yaml");
     expect(clicked?.href).toBe("blob:mock-url");
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");

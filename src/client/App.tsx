@@ -126,8 +126,8 @@ function App() {
         onManageBrokers={() => setView({ kind: "connect" })}
         onDisconnectAll={handleDisconnectAll}
         onLogout={handleLogout}
-        searchSlotRef={setSearchSlot}
-        exportSlotRef={setExportSlot}
+        onSearchSlotMount={setSearchSlot}
+        onExportSlotMount={setExportSlot}
       />
 
       <main>
