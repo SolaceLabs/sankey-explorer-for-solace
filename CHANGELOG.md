@@ -43,6 +43,9 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- `ConnectScreen` is split (296 to 155 lines): the form in `ConnectForm`, export/import in
+  `ConfigFileActions`, and connecting several entries plus remembering their credentials in
+  the tested `lib/brokerConnections.ts` (`connectEach`, `withNewConnectionConfig`).
 - File downloads (diagram SVG, broker config YAML) share one tested `lib/downloadFile.ts`.
 - The app header is its own `TopBar` component (brand, search slot, Message VPN menu, refresh,
   export slot, logout); `App` keeps only session and view state.
