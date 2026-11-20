@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiRequestError } from "./api/client";
+import { api, apiErrorMessage } from "./api/client";
 import { LoginScreen } from "./components/LoginScreen";
 import { ConnectScreen } from "./components/ConnectScreen";
 import { SankeyChart } from "./components/SankeyChart";
-import { VpnMenu } from "./components/VpnMenu";
-import { toSankeyEdges } from "../shared/toSankeyEdges";
-import { buildEndpointOwners } from "./lib/buildEndpointOwners";
-import { buildBrokerColorPalette, buildEndpointBrokerColors } from "./lib/buildEndpointBrokerColors";
-import { buildEndpointBrokerLabels } from "./lib/buildEndpointBrokerLabels";
-import { buildEndpointVpnHost } from "./lib/buildEndpointVpnHost";
+import { TopBar } from "./components/TopBar";
+import { buildBrokerColorPalette } from "./lib/buildEndpointBrokerColors";
+import { buildDiagramData } from "./lib/diagramData";
 import type { BrokerConfigEntry } from "./lib/brokerConfig";
 import type { BrokerConnectionStatus, BrokerQueryError, EndpointInfo, SessionInfo } from "./types";
 import "./index.css";
@@ -43,7 +40,7 @@ function App() {
     } catch (err) {
       setView({
         kind: "error",
-        message: err instanceof ApiRequestError ? err.message : "Failed to load endpoints",
+        message: apiErrorMessage(err, "Failed to load endpoints"),
       });
     }
   }, []);
@@ -62,7 +59,7 @@ function App() {
     } catch (err) {
       setView({
         kind: "error",
-        message: err instanceof ApiRequestError ? err.message : "Could not reach the server",
+        message: apiErrorMessage(err, "Could not reach the server"),
       });
     }
   }, [loadEndpoints]);
@@ -88,7 +85,7 @@ function App() {
       setView({ kind: "ready", endpoints, errors });
     } catch (err) {
       setRefreshError(
-        err instanceof ApiRequestError ? err.message : "Refresh failed",
+        apiErrorMessage(err, "Refresh failed"),
       );
     } finally {
       setIsRefreshing(false);
@@ -112,67 +109,26 @@ function App() {
     [session?.brokers],
   );
 
-  const unsubscribedEndpoints = useMemo(
-    () =>
-      view.kind === "ready"
-        ? view.endpoints.filter((e) => e.subscriptions.length === 0).map((e) => e.name)
-        : [],
-    [view],
-  );
-  const hasBrokers = Boolean(session && session.brokers.length > 0);
+  // One derivation per endpoints reply, not per render: the chart keys its
+  // selection on these references (a failed refresh re-renders App but must
+  // not drop the selection).
+  const readyEndpoints = view.kind === "ready" ? view.endpoints : null;
+  const diagramData = useMemo(() => readyEndpoints && buildDiagramData(readyEndpoints), [readyEndpoints]);
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <img className="brand-icon" src="/sankey-explorer-app-icon.svg" alt="" width={34} height={34} />
-          <div className="brand-text">
-            <h1 className="brand-title">Sankey Explorer</h1>
-            <span className="brand-subtitle">for Solace</span>
-          </div>
-        </div>
-        {/* SankeyChart portals its search in here - see its searchSlot prop. */}
-        <div className="topbar-search" ref={setSearchSlot} />
-        <div className="topbar-actions">
-          {session && hasBrokers && (
-            <>
-              <VpnMenu
-                brokers={session.brokers}
-                colors={brokerColors}
-                onManage={() => setView({ kind: "connect" })}
-                onDisconnectAll={handleDisconnectAll}
-              />
-              <button
-                type="button"
-                className="icon-button icon-button--primary"
-                aria-label="Refresh"
-                title="Refresh"
-                aria-busy={isRefreshing}
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-              >
-                <svg
-                  className={isRefreshing ? "icon icon--spinning" : "icon"}
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path d="M20 11a8 8 0 1 0-2.3 5.7" />
-                  <path d="M20 4v7h-7" />
-                </svg>
-              </button>
-              {/* SankeyChart portals its export button in here (exportSlot). */}
-              <div className="topbar-export" ref={setExportSlot} />
-            </>
-          )}
-          {session?.authRequired && session.authenticated && (
-            <button type="button" className="button button--outline" onClick={handleLogout}>
-              Logout
-            </button>
-          )}
-        </div>
-      </header>
+      <TopBar
+        brokers={session?.brokers ?? []}
+        brokerColors={brokerColors}
+        showLogout={Boolean(session?.authRequired && session.authenticated)}
+        isRefreshing={isRefreshing}
+        onRefresh={handleRefresh}
+        onManageBrokers={() => setView({ kind: "connect" })}
+        onDisconnectAll={handleDisconnectAll}
+        onLogout={handleLogout}
+        onSearchSlotMount={setSearchSlot}
+        onExportSlotMount={setExportSlot}
+      />
 
       <main>
         {view.kind === "loading" && <p className="hint">Loading...</p>}
@@ -194,7 +150,7 @@ function App() {
             onDone={loadEndpoints}
           />
         )}
-        {view.kind === "ready" && (
+        {view.kind === "ready" && diagramData && (
           <div className="ready-view">
             {refreshError && <p className="error banner">{refreshError}</p>}
             {view.errors.length > 0 && (
@@ -203,16 +159,7 @@ function App() {
                 {view.errors.map((e) => `${e.brokerLabel} (${e.message})`).join("; ")}
               </p>
             )}
-            <SankeyChart
-              edges={toSankeyEdges(view.endpoints)}
-              endpointOwners={buildEndpointOwners(view.endpoints)}
-              endpointBrokerColors={buildEndpointBrokerColors(view.endpoints)}
-              endpointBrokerLabels={buildEndpointBrokerLabels(view.endpoints)}
-              endpointVpnHost={buildEndpointVpnHost(view.endpoints)}
-              unsubscribedEndpoints={unsubscribedEndpoints}
-              searchSlot={searchSlot}
-              exportSlot={exportSlot}
-            />
+            <SankeyChart {...diagramData} searchSlot={searchSlot} exportSlot={exportSlot} />
           </div>
         )}
       </main>

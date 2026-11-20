@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { ReachedEndpoint, SelectionDetails } from "../lib/describeSelection";
 import { endpointDisplayName } from "../lib/endpointDisplayName";
+import { countLabel } from "../lib/countLabel";
 import { EndpointTypeBadge } from "./EndpointTypeBadge";
 import { useViewportFitHeight } from "./useViewportFitHeight";
 
@@ -14,8 +15,6 @@ interface SelectionPanelProps {
   onClose: () => void;
   endpointOwners?: Map<string, string>;
 }
-
-const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 function EndpointItem({ endpoint, owner }: { endpoint: ReachedEndpoint; owner?: string }) {
   const how = endpoint.match === "subscribed" ? "Own subscription" : "Covered by a wider subscription";
@@ -84,12 +83,12 @@ export function SelectionPanel({ details, isFocused, onToggleFocus, onClose, end
               // A branch: one message only reaches some of these, depending
               // on the full topic it is published to.
               <>
-                <strong>{plural(details.endpoints.length, "endpoint")}</strong>{" "}
+                <strong>{countLabel(details.endpoints.length, "endpoint")}</strong>{" "}
                 {details.endpoints.length === 1 ? "receives" : "receive"} topics from this branch.
               </>
             ) : (
               <>
-                Messages published here reach <strong>{plural(details.endpoints.length, "endpoint")}</strong>.
+                Messages published here reach <strong>{countLabel(details.endpoints.length, "endpoint")}</strong>.
               </>
             )}
           </p>
@@ -102,7 +101,7 @@ export function SelectionPanel({ details, isFocused, onToggleFocus, onClose, end
       ) : (
         <>
           <p className="selection-panel-summary">
-            Declares <strong>{plural(details.subscriptions.length, "subscription")}</strong>
+            Declares <strong>{countLabel(details.subscriptions.length, "subscription")}</strong>
             {endpointOwners?.get(details.id) ? `, owner ${endpointOwners.get(details.id)}` : ""}.
           </p>
           <ul className="selection-list">

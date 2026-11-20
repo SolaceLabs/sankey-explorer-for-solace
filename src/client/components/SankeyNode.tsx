@@ -3,6 +3,7 @@ import type { SankeyLinkDatum, SankeyNodeDatum } from "../lib/sankeyLayout";
 import { endpointDisplayName } from "../lib/endpointDisplayName";
 import { nodeDisplayLabel } from "../lib/nodeDisplayLabel";
 import { endpointTypeCode, endpointTypeLabel } from "../lib/nodeKind";
+import { BADGE_COLORS, DIAGRAM_COLORS } from "../lib/diagramColors";
 
 /** Badge geometry - sankeyLayout reserves ENDPOINT_BADGE_SPACE for it. */
 const BADGE_WIDTH = 26;
@@ -10,13 +11,6 @@ const BADGE_HEIGHT = 16;
 const BADGE_GAP = 8;
 const LABEL_OFFSET = 6;
 const LINE_HEIGHT = 12;
-// Inline attributes, not CSS classes: the SVG export copies the element
-// without the page stylesheet. Same colors as .type-badge in index.css.
-const BADGE_COLORS = {
-  Q: { fill: "#00C895", stroke: "none", text: "#03213B" },
-  TE: { fill: "#C2F7FF", stroke: "none", text: "#03213B" },
-  DS: { fill: "none", stroke: "#FFFFFF", text: "#FFFFFF" },
-} as const;
 const DIMMED_OPACITY = 0.35;
 
 interface SankeyNodeProps {
@@ -69,7 +63,7 @@ export function SankeyNode({ node, isEndpoint, isSelected, isDimmed, color, subL
         width={Math.max(1, x1 - x0)}
         height={visualHeight}
         fill={color}
-        stroke={isSelected ? "#ABFF88" : "none"}
+        stroke={isSelected ? DIAGRAM_COLORS.selected : "none"}
         strokeWidth={isSelected ? 2 : 0}
         rx={2}
         style={{ pointerEvents: "none" }}
@@ -120,7 +114,7 @@ export function SankeyNode({ node, isEndpoint, isSelected, isDimmed, color, subL
         fontSize={12}
         fontWeight={isSelected ? 700 : 400}
         fontFamily='"Space Mono", monospace'
-        fill={isSelected ? "#ABFF88" : "#FFFFFF"}
+        fill={isSelected ? DIAGRAM_COLORS.selected : DIAGRAM_COLORS.label}
         {...hover}
       >
         {label}
@@ -134,7 +128,7 @@ export function SankeyNode({ node, isEndpoint, isSelected, isDimmed, color, subL
           textAnchor="start"
           fontSize={10}
           fontFamily='"Space Mono", monospace'
-          fill="rgba(255, 255, 255, 0.65)"
+          fill={DIAGRAM_COLORS.subLabel}
           {...hover}
         >
           {line}

@@ -1,4 +1,5 @@
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
+import { adjacencyOf, reachableFrom } from "./flowGraph";
 
 export interface RelevantSubgraphOptions {
   /**
@@ -9,48 +10,6 @@ export interface RelevantSubgraphOptions {
    * queue lights up "retail/orders/created" too.
    */
   includeImpliedAncestors?: boolean;
-}
-
-function buildAdjacency(
-  edges: SankeyEdge[],
-  includeImpliedAncestors: boolean,
-): {
-  outgoing: Map<string, string[]>;
-  incoming: Map<string, string[]>;
-} {
-  const outgoing = new Map<string, string[]>();
-  const incoming = new Map<string, string[]>();
-  for (const edge of edges) {
-    if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
-    outgoing.get(edge.source)!.push(edge.target);
-
-    // Ancestors ("what is this node actually reached from") must only ever
-    // be real subscriptions. An implied wildcard-coverage edge (see
-    // addWildcardCoverageEdges) must not make it look like a queue
-    // literally subscribed to a topic it never declared - clicking the
-    // queue should show its real subscriptions only. Implied edges still
-    // count as outgoing above, so clicking the covered topic itself still
-    // shows the queue that reaches it via the wildcard.
-    if (edge.implied && !includeImpliedAncestors) continue;
-    if (!incoming.has(edge.target)) incoming.set(edge.target, []);
-    incoming.get(edge.target)!.push(edge.source);
-  }
-  return { outgoing, incoming };
-}
-
-function collectReachable(start: string, adjacency: Map<string, string[]>): Set<string> {
-  const visited = new Set<string>([start]);
-  const queue = [start];
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    for (const neighbor of adjacency.get(current) ?? []) {
-      if (!visited.has(neighbor)) {
-        visited.add(neighbor);
-        queue.push(neighbor);
-      }
-    }
-  }
-  return visited;
 }
 
 /**
@@ -82,9 +41,17 @@ export function filterToRelevantSubgraph(
   );
   if (!nodeExists) return [];
 
-  const { outgoing, incoming } = buildAdjacency(edges, options.includeImpliedAncestors ?? false);
-  const descendants = collectReachable(selectedNodeId, outgoing);
-  const ancestors = collectReachable(selectedNodeId, incoming);
+  // Ancestors ("what is this node actually reached from") are only real
+  // subscriptions by default: an implied wildcard-coverage edge (see
+  // addWildcardCoverageEdges) must not make it look like a queue literally
+  // subscribed to a topic it never declared. Implied edges always count
+  // downstream, so the covered topic itself still shows the queue that
+  // reaches it via the wildcard.
+  const includeImplied = options.includeImpliedAncestors ?? false;
+  const outgoing = adjacencyOf(edges, "outgoing");
+  const incoming = adjacencyOf(edges, "incoming", (edge) => includeImplied || !edge.implied);
+  const descendants = reachableFrom(selectedNodeId, outgoing);
+  const ancestors = reachableFrom(selectedNodeId, incoming);
   const relevantNodes = new Set([...descendants, ...ancestors]);
 
   return edges.filter(

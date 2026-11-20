@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { DiagramViewMode } from "../lib/buildDisplayEdges";
 import type { SortMode } from "../lib/sankeyLayout";
+import { countLabel } from "../lib/countLabel";
 
 export interface DiagramStats {
   topics: number;
@@ -37,8 +38,6 @@ const SORT_MODES: { value: SortMode; label: string }[] = [
   { value: "owner", label: "Owner" },
   { value: "messageVpn", label: "Message VPN" },
 ];
-
-const plural = (count: number, word: string): string => `${count} ${word}${count === 1 ? "" : "s"}`;
 
 /** Display settings, counts and export for the diagram - presentational only. */
 export function DiagramToolbar(props: DiagramToolbarProps) {
@@ -86,7 +85,7 @@ export function DiagramToolbar(props: DiagramToolbarProps) {
       <div className="toolbar-spacer" />
 
       <span className="toolbar-stat">
-        {plural(stats.topics, "topic")}, {plural(stats.endpoints, "endpoint")}
+        {countLabel(stats.topics, "topic")}, {countLabel(stats.endpoints, "endpoint")}
       </span>
       {stats.unsubscribedEndpoints.length > 0 && (
         <span className="toolbar-stat toolbar-stat--warning" title={stats.unsubscribedEndpoints.join(", ")}>

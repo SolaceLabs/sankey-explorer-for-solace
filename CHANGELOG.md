@@ -43,6 +43,34 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- `ConnectScreen` is split (296 to 155 lines): the form in `ConnectForm`, export/import in
+  `ConfigFileActions`, and connecting several entries plus remembering their credentials in
+  the tested `lib/brokerConnections.ts` (`connectEach`, `withNewConnectionConfig`).
+- File downloads (diagram SVG, broker config YAML) share one tested `lib/downloadFile.ts`.
+- The app header is its own `TopBar` component (brand, search slot, Message VPN menu, refresh,
+  export slot, logout); `App` keeps only session and view state.
+- `apiErrorMessage(err, fallback)` in `api/client.ts` replaces six inline
+  `err instanceof ApiRequestError ? err.message : ...` checks in `App`, `ConnectScreen` and
+  `LoginScreen`.
+- One tested `countLabel` ("1 endpoint", "7 endpoints") replaces the two identical `plural`
+  helpers in `DiagramToolbar` and `SelectionPanel`.
+- `SankeyChart` is split by concern (300 to 200 lines): the flows and their gradient render in
+  `SankeyLinks` with a typed link path (no more `link as never`), the selection and its
+  invalidation live in `useDiagramSelection`, the canvas width in `useElementWidth`, and the
+  flow highlight (`flowHighlight`, `flowThrough`) and endpoint sub-lines (`endpointSubLines`)
+  are tested `lib` functions.
+- Diagram colors live in one module (`lib/diagramColors.ts`): named brand colors, the role each
+  plays (topic, flow, Gradient 16, selection, labels, endpoint types, badges, broker palette,
+  export background) and `nodeFillColor`, instead of hex values spread over `SankeyChart`,
+  `SankeyNode`, `exportSvg` and `buildEndpointBrokerColors`.
+- Graph walking lives in one tested module (`lib/flowGraph.ts`: `nodeIdsOf`, `adjacencyOf`,
+  `reachableFrom`, `appendTo`) instead of four hand-rolled copies in `filterToRelevantSubgraph`,
+  `describeSelection`, `buildQueueSortKeys` and `removeCycles` (plus three node-id collectors);
+  this also removes their non-null assertions.
+- Endpoint node ids are produced and read from one table (`shared/endpointNodeId.ts`):
+  `toSankeyEdges` builds "Queue: X" style ids from it, and the client's type checks, display
+  names, direct-subscriber filter and colors read the type back from it instead of repeating
+  the "Queue:" / "Topic Endpoint:" / "Direct Subscriber:" prefixes in five places.
 - UI redesign (dark Solace look): brand block "Sankey Explorer / for Solace", Message VPNs as
   one chip with a panel holding "Manage" and "Disconnect all" (replaces three large header
   buttons), refresh as an icon button, round icon-only SVG export in the top bar right of
@@ -81,6 +109,13 @@ All notable changes to this project are documented here
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
 
 ### Fixed
+- Removing a Message VPN connection that the server refuses now shows the server's error on
+  the connect screen instead of failing silently with an unhandled promise rejection.
+- A failed refresh no longer closes the selection panel: the diagram inputs are derived once per
+  endpoints reply (`lib/diagramData.ts`) instead of on every render of `App`, which also stops
+  the layout from being recomputed on unrelated re-renders.
+- The empty diagram no longer points at a source file that does not exist
+  (`backend/src/semp/queries.ts`); it tells the user to refresh once an endpoint subscribes.
 - Dependency advisories that failed the `npm audit` gate: `vitest` / `@vitest/coverage-v8`
   raised to `^4.1.12`; lockfile refresh for `body-parser` 2.4.0, `undici` 8.12.3, `qs` 6.17.1
   and `ip-address` 10.7.5.

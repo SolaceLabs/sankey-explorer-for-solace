@@ -1,4 +1,5 @@
 import type { EndpointInfo } from "./types.js";
+import { ENDPOINT_TYPE_LABELS } from "./endpointNodeId.js";
 
 export interface SankeyEdge {
   source: string;
@@ -21,11 +22,6 @@ export function shouldShowBrokerSuffix(endpoints: Pick<EndpointInfo, "brokerLabe
   return new Set(endpoints.map((e) => e.brokerLabel)).size > 1;
 }
 
-const TYPE_LABELS: Record<EndpointInfo["type"], string> = {
-  queue: "Queue",
-  "topic-endpoint": "Topic Endpoint",
-  "direct-subscriber": "Direct Subscriber",
-};
 
 /**
  * Human-readable node label, unique per queue/topic-endpoint/direct
@@ -40,7 +36,7 @@ export function endpointLabel(
   endpoint: Pick<EndpointInfo, "type" | "name" | "brokerLabel">,
   showBrokerSuffix: boolean,
 ): string {
-  const base = `${TYPE_LABELS[endpoint.type]}: ${endpoint.name}`;
+  const base = `${ENDPOINT_TYPE_LABELS[endpoint.type]}: ${endpoint.name}`;
   return showBrokerSuffix ? `${base} (${endpoint.brokerLabel})` : base;
 }
 

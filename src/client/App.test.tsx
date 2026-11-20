@@ -217,3 +217,23 @@ describe("App - topbar actions once connected", () => {
     );
   });
 });
+
+describe("App - diagram selection", () => {
+  it("keeps the selected node when a refresh fails, since the data did not change", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints)
+      .mockResolvedValueOnce(oneEndpoint)
+      .mockRejectedValueOnce(new ApiRequestError("broker unreachable"));
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByText("orders-q"));
+    const details = () => screen.queryByRole("complementary", { name: "Selection details" });
+    expect(details()).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    expect(await screen.findByText("broker unreachable")).toBeInTheDocument();
+    expect(details()).toBeInTheDocument();
+  });
+});

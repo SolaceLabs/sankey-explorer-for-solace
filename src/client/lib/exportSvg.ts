@@ -1,5 +1,7 @@
+import { DIAGRAM_COLORS } from "./diagramColors";
+import { downloadFile } from "./downloadFile";
+
 const SVG_NS = "http://www.w3.org/2000/svg";
-const EXPORT_BACKGROUND = "#093B5F"; // --panel, Deep Blue
 
 /**
  * Downloads the given live diagram as a standalone SVG file.
@@ -22,15 +24,10 @@ export function downloadSvg(
   background.setAttribute("y", "0");
   background.setAttribute("width", String(width));
   background.setAttribute("height", String(height));
-  background.setAttribute("fill", EXPORT_BACKGROUND);
+  background.setAttribute("fill", DIAGRAM_COLORS.exportBackground);
   clone.insertBefore(background, clone.firstChild);
 
   const source =
     '<?xml version="1.0" standalone="no"?>\n' + new XMLSerializer().serializeToString(clone);
-  const url = URL.createObjectURL(new Blob([source], { type: "image/svg+xml" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadFile(source, "image/svg+xml", fileName);
 }

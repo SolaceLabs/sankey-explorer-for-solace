@@ -1,27 +1,30 @@
-/**
- * Endpoint nodes (the rightmost column) are labeled "Queue: X",
- * "Topic Endpoint: X", or "Direct Subscriber: X".
- */
-export function isEndpointNode(id: string): boolean {
-  return (
-    id.startsWith("Queue:") ||
-    id.startsWith("Topic Endpoint:") ||
-    id.startsWith("Direct Subscriber:")
-  );
-}
-
-/**
- * Human-readable endpoint type for the sub-label under an endpoint's name
- * (e.g. "Queue"). Null for non-endpoint (topic hierarchy) ids.
- */
-export function endpointTypeLabel(id: string): string | null {
-  if (id.startsWith("Queue:")) return "Queue";
-  if (id.startsWith("Topic Endpoint:")) return "Topic Endpoint";
-  if (id.startsWith("Direct Subscriber:")) return "Direct Subscriber";
-  return null;
-}
+import { ENDPOINT_TYPE_LABELS, endpointTypeOfNodeId } from "../../shared/endpointNodeId";
+import type { EndpointType } from "../../shared/types";
 
 export type EndpointTypeCode = "Q" | "TE" | "DS";
+
+/** Badge codes per endpoint type - see endpointTypeCode. */
+const TYPE_CODES: Readonly<Record<EndpointType, EndpointTypeCode>> = {
+  queue: "Q",
+  "topic-endpoint": "TE",
+  "direct-subscriber": "DS",
+};
+
+/**
+ * The endpoint type of a node id ("Queue: X", "Topic Endpoint: X",
+ * "Direct Subscriber: X"), or null for a topic hierarchy node. All other
+ * helpers here are derived from it.
+ */
+export const endpointTypeOf = (id: string): EndpointType | null => endpointTypeOfNodeId(id);
+
+/** Endpoint nodes are the rightmost column of the diagram. */
+export const isEndpointNode = (id: string): boolean => endpointTypeOf(id) !== null;
+
+/** Human-readable type ("Queue"); null for topic hierarchy ids. */
+export function endpointTypeLabel(id: string): string | null {
+  const type = endpointTypeOf(id);
+  return type ? ENDPOINT_TYPE_LABELS[type] : null;
+}
 
 /**
  * Short badge code drawn next to an endpoint's name in the diagram (and in
@@ -29,8 +32,6 @@ export type EndpointTypeCode = "Q" | "TE" | "DS";
  * "Queue"/"Topic Endpoint" sub-line. Null for topic hierarchy ids.
  */
 export function endpointTypeCode(id: string): EndpointTypeCode | null {
-  if (id.startsWith("Queue:")) return "Q";
-  if (id.startsWith("Topic Endpoint:")) return "TE";
-  if (id.startsWith("Direct Subscriber:")) return "DS";
-  return null;
+  const type = endpointTypeOf(id);
+  return type ? TYPE_CODES[type] : null;
 }

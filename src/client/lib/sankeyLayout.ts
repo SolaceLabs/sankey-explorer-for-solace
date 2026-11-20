@@ -1,6 +1,7 @@
 import { sankey, type SankeyGraph } from "d3-sankey";
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
 import { removeCycles } from "./removeCycles";
+import { nodeIdsOf } from "./flowGraph";
 import { buildQueueSortKeys } from "./buildQueueSortKeys";
 import { nodeDisplayLabel } from "./nodeDisplayLabel";
 import { endpointDisplayName } from "./endpointDisplayName";
@@ -115,23 +116,19 @@ export function computeSankeyLayout(
     );
   }
 
-  const nodeIds = new Set<string>();
-  for (const edge of acyclicEdges) {
-    nodeIds.add(edge.source);
-    nodeIds.add(edge.target);
-  }
+  const nodeIds = nodeIdsOf(acyclicEdges);
 
   // d3-sankey crashes with "RangeError: Invalid array length" when nodes=[]
   // is passed to sankey() (internally: d3.max([]) -> undefined -> NaN ->
   // new Array(NaN)). Empty input is a valid state (e.g. endpoints with no
   // subscriptions at all), not an error - so bail out early with an empty
   // graph BEFORE calling sankey().
-  if (nodeIds.size === 0) {
+  if (nodeIds.length === 0) {
     return { nodes: [], links: [] };
   }
 
   const graph: SankeyGraph<SankeyNodeDatum, SankeyLinkDatum> = {
-    nodes: [...nodeIds].map((id) => ({ id })),
+    nodes: nodeIds.map((id) => ({ id })),
     links: acyclicEdges.map((e) => ({
       source: e.source,
       target: e.target,
@@ -149,7 +146,7 @@ export function computeSankeyLayout(
           : null;
 
   const { left: leftMargin, right: rightMargin } = computeLabelMargins(
-    [...nodeIds],
+    nodeIds,
     width,
     endpointOwners,
     endpointVpnHost,

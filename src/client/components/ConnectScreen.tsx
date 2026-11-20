@@ -1,8 +1,12 @@
-import { useRef, useState } from "react";
-import { api, ApiRequestError } from "../api/client";
+import { useState } from "react";
+import { api, apiErrorMessage } from "../api/client";
 import { parseBrokerConfig, serializeBrokerConfig } from "../lib/brokerConfig";
 import type { BrokerConfigEntry } from "../lib/brokerConfig";
+import { connectEach, withNewConnectionConfig } from "../lib/brokerConnections";
+import { downloadFile } from "../lib/downloadFile";
 import type { BrokerConnectionStatus } from "../types";
+import { ConfigFileActions } from "./ConfigFileActions";
+import { ConnectForm } from "./ConnectForm";
 
 interface ConnectScreenProps {
   brokers: BrokerConnectionStatus[];
@@ -19,6 +23,33 @@ interface ConnectScreenProps {
   onDone: () => void;
 }
 
+const connectionFailed = (err: unknown) => apiErrorMessage(err, "Connection failed");
+
+interface BrokerListProps {
+  brokers: BrokerConnectionStatus[];
+  removingId: string | null;
+  onRemove: (id: string) => void;
+}
+
+function BrokerList({ brokers, removingId, onRemove }: BrokerListProps) {
+  return (
+    <ul className="broker-list">
+      {brokers.map((b) => (
+        <li key={b.id}>
+          <span>
+            {b.label}
+            <span className="hint"> — {b.vpn}</span>
+          </span>
+          <button type="button" onClick={() => onRemove(b.id)} disabled={removingId === b.id}>
+            {removingId === b.id ? "..." : "Remove"}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Add, remove, export and import Message VPN connections. */
 export function ConnectScreen({
   brokers,
   onBrokersChanged,
@@ -26,68 +57,29 @@ export function ConnectScreen({
   onBrokerConfigsChanged,
   onDone,
 }: ConnectScreenProps) {
-  // Defaults to host.docker.internal rather than localhost because the
-  // overwhelmingly common case is running THIS app itself via the Docker
-  // quickstart (see README) - inside that container, "localhost" is the
-  // container itself, not the host a locally-running broker's management
-  // port is published on. See the hint text below the input for when to
-  // override this (local non-Docker dev, or a broker that's neither on
-  // the host nor reachable via host.docker.internal).
-  const [baseUrl, setBaseUrl] = useState("http://host.docker.internal:8080");
-  const [vpn, setVpn] = useState("default");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [label, setLabel] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const hasBrokers = brokers.length > 0;
   const exportableCount = brokers.filter((b) => brokerConfigs.has(b.id)).length;
 
-  /** Id of the one entry in `updated` that wasn't in `previous` yet. */
-  function findNewId(
-    previous: BrokerConnectionStatus[],
-    updated: BrokerConnectionStatus[],
-  ): string | undefined {
-    const previousIds = new Set(previous.map((b) => b.id));
-    return updated.find((b) => !previousIds.has(b.id))?.id;
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleConnect(entry: BrokerConfigEntry): Promise<boolean> {
     setError(null);
-    setSubmitting(true);
     try {
-      const entry: BrokerConfigEntry = {
-        baseUrl,
-        vpn,
-        username,
-        password,
-        label: label.trim() || undefined,
-      };
       const updated = await api.connect(entry);
       onBrokersChanged(updated);
-      const newId = findNewId(brokers, updated);
-      if (newId) {
-        onBrokerConfigsChanged(new Map(brokerConfigs).set(newId, entry));
-      }
-      // Clear credentials/label so a second broker isn't accidentally
-      // submitted with the first one's password; keep URL/VPN since a
-      // mesh of brokers often shares a similar SEMP host pattern.
-      setUsername("");
-      setPassword("");
-      setLabel("");
+      const configs = withNewConnectionConfig(brokerConfigs, brokers, updated, entry);
+      if (configs !== brokerConfigs) onBrokerConfigsChanged(new Map(configs));
+      return true;
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Connection failed");
-    } finally {
-      setSubmitting(false);
+      setError(connectionFailed(err));
+      return false;
     }
   }
 
   async function handleRemove(id: string) {
+    setError(null);
     setRemovingId(id);
     try {
       const updated = await api.disconnectOne(id);
@@ -97,6 +89,8 @@ export function ConnectScreen({
         next.delete(id);
         onBrokerConfigsChanged(next);
       }
+    } catch (err) {
+      setError(apiErrorMessage(err, "Could not remove the connection"));
     } finally {
       setRemovingId(null);
     }
@@ -106,50 +100,19 @@ export function ConnectScreen({
     const entries = brokers
       .map((b) => brokerConfigs.get(b.id))
       .filter((entry): entry is BrokerConfigEntry => entry !== undefined);
-    const yamlText = serializeBrokerConfig(entries);
-    const blob = new Blob([yamlText], { type: "application/x-yaml" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "broker-config.yaml";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(serializeBrokerConfig(entries), "application/x-yaml", "broker-config.yaml");
   }
 
-  function handleImportClick() {
-    fileInputRef.current?.click();
-  }
-
-  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-importing the same file later
-    if (!file) return;
-
+  async function handleImport(file: File) {
     setError(null);
     setImporting(true);
     try {
       const entries = parseBrokerConfig(await file.text());
-      let updated = brokers;
-      let configs = brokerConfigs;
-      const failed: string[] = [];
-      for (const entry of entries) {
-        try {
-          const previous = updated;
-          updated = await api.connect(entry);
-          const newId = findNewId(previous, updated);
-          if (newId) {
-            configs = new Map(configs).set(newId, entry);
-          }
-        } catch (err) {
-          failed.push(
-            `${entry.label || entry.vpn}: ${err instanceof ApiRequestError ? err.message : "Connection failed"}`,
-          );
-        }
-      }
-      onBrokersChanged(updated);
-      onBrokerConfigsChanged(configs);
-      if (failed.length > 0) {
-        setError(`Some connections from the imported file failed: ${failed.join("; ")}`);
+      const result = await connectEach(entries, { brokers, configs: brokerConfigs }, api.connect, connectionFailed);
+      onBrokersChanged(result.brokers);
+      onBrokerConfigsChanged(new Map(result.configs));
+      if (result.failures.length > 0) {
+        setError(`Some connections from the imported file failed: ${result.failures.join("; ")}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not import config file");
@@ -164,125 +127,21 @@ export function ConnectScreen({
         <p className="eyebrow">Message VPN connection</p>
         <h1>{hasBrokers ? "Manage Message VPN connections" : "Connect to Message VPN"}</h1>
 
-        {hasBrokers && (
-          <ul className="broker-list">
-            {brokers.map((b) => (
-              <li key={b.id}>
-                <span>
-                  {b.label}
-                  <span className="hint"> — {b.vpn}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRemove(b.id)}
-                  disabled={removingId === b.id}
-                >
-                  {removingId === b.id ? "..." : "Remove"}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {hasBrokers && <BrokerList brokers={brokers} removingId={removingId} onRemove={handleRemove} />}
 
-        <form onSubmit={handleSubmit} className="connect-form">
-          {!hasBrokers && (
-            <>
-              <p className="hint">
-                The broker's SEMP management host, e.g. http://broker-host:8080
-                (SEMP v2 - no path needed). A read-only user is enough.
-              </p>
-              {/* The rest only matters in some setups - folded away so the
-                  form itself stays the first thing on the card. */}
-              <details>
-                <summary>Several Message VPNs, or which host to enter?</summary>
-                <p>
-                  Connecting to several message VPNs (maybe across multiple
-                  brokers)? Add each one here - they'll all show up combined in
-                  the diagram, color-coded by message VPN.
-                </p>
-                <p>
-                  Pre-filled with <code>host.docker.internal</code> since
-                  that's what reaches a broker on your own machine from inside
-                  this app's own Docker container (the quickstart way of
-                  running it) - running this app locally instead (<code>npm run dev</code>),
-                  or a broker on a different host entirely? Change it to{" "}
-                  <code>localhost</code> or the broker's real address.
-                </p>
-              </details>
-            </>
-          )}
-          <label>
-            SEMP host
-            <input
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="http://broker-host:8080"
-              required
-            />
-          </label>
-          <label>
-            Message VPN
-            <input value={vpn} onChange={(e) => setVpn(e.target.value)} required />
-          </label>
-          <label>
-            Username
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Label (optional)
-            <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder={vpn || "e.g. EU-VPN"}
-            />
-          </label>
-          {error && <p className="error">{error}</p>}
-          <button type="submit" disabled={submitting}>
-            {submitting ? "Connecting..." : hasBrokers ? "Add Message VPN" : "Connect"}
-          </button>
-        </form>
+        <ConnectForm isFirstConnection={!hasBrokers} error={error} onConnect={handleConnect} />
 
-        <div className="config-file-actions">
-          <button type="button" onClick={handleExport} disabled={exportableCount === 0}>
-            Export config
-          </button>
-          <button type="button" onClick={handleImportClick} disabled={importing}>
-            {importing ? "Importing..." : "Import config"}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".yaml,.yml,application/x-yaml,text/yaml"
-            onChange={handleImportFile}
-            hidden
-          />
-        </div>
-        <p className="hint">
-          Export saves every connection added in this browser tab
-          {exportableCount > 0 ? ` (${exportableCount} of ${brokers.length})` : ""} as one YAML
-          file, including passwords in clear text - it never leaves your
-          machine, but store it as carefully as the passwords themselves.
-          {hasBrokers && exportableCount < brokers.length && (
-            <> Connections from before a page reload aren't included - remove and re-add them to export them too.</>
-          )}
-        </p>
+        <ConfigFileActions
+          exportableCount={exportableCount}
+          connectionCount={brokers.length}
+          importing={importing}
+          onExport={handleExport}
+          onImport={handleImport}
+        />
 
         {hasBrokers && (
           <button type="button" onClick={onDone}>
-            {"View diagram"}
+            View diagram
           </button>
         )}
 

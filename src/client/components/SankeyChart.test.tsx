@@ -20,6 +20,13 @@ describe("SankeyChart - empty state", () => {
     render(<SankeyChart edges={[]} />);
     expect(screen.getByText(/No topic subscriptions found/)).toBeInTheDocument();
   });
+
+  it("tells the user what to do next instead of pointing at source files", () => {
+    render(<SankeyChart edges={[]} />);
+    const message = screen.getByText(/No topic subscriptions found/);
+    expect(message).toHaveTextContent(/refresh/i);
+    expect(message).not.toHaveTextContent(/\.ts\b|SEMP|parser/);
+  });
 });
 
 describe("SankeyChart - labels", () => {
