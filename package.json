@@ -45,7 +45,7 @@
     "@types/supertest": "^7.2.1",
     "@vitejs/plugin-react": "^6.0.4",
     "@vitest/coverage-v8": "^5.1.0",
-    "jsdom": "^30.0.1",
+    "jsdom": "^31.0.1",
     "oxlint": "^1.76.0",
     "supertest": "^7.3.2",
     "tsx": "^4.23.1",
