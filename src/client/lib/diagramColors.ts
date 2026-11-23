@@ -34,6 +34,26 @@ export const DIAGRAM_COLORS = {
   exportBackground: BRAND.deepBlue,
 } as const;
 
+/**
+ * Live status colors - the icon and word next to an endpoint, the legend
+ * and the detail panel. Flowing reuses the brand's Bright Green (the
+ * selection is an outline around the whole bar, never text, so the two
+ * don't collide); piling up is the brand orange that already means
+ * "warning"; stale, the worse finding, uses the app's error red (not a
+ * brand color, see --error in index.css), darker than the orange so the two
+ * differ in lightness too. Every status also has its own icon and word, so
+ * color is never the only signal.
+ */
+export const ACTIVITY_COLORS: Readonly<Record<"flowing" | "piling-up" | "stale" | "idle", string>> = {
+  flowing: BRAND.brightGreen,
+  "piling-up": BRAND.orange,
+  stale: "#E0685C",
+  idle: "rgba(255, 255, 255, 0.75)",
+};
+
+/** Links into an endpoint that is receiving messages right now. */
+export const ACTIVE_FLOW_COLOR = BRAND.classicGreen;
+
 /** Endpoint bars with a single broker; the badges use the same colors. */
 export const ENDPOINT_TYPE_COLORS: Readonly<Record<EndpointType, string>> = {
   queue: BRAND.classicGreen,

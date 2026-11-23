@@ -17,6 +17,37 @@ interface TopBarProps {
    */
   onSearchSlotMount: (element: HTMLDivElement | null) => void;
   onExportSlotMount: (element: HTMLDivElement | null) => void;
+  /** Makes the logo and title a button back to the unfiltered diagram; omitted while there is none. */
+  onShowOverview?: () => void;
+}
+
+function Brand({ onShowOverview }: Pick<TopBarProps, "onShowOverview">) {
+  const content = (
+    <>
+      <img className="brand-icon" src="/sankey-explorer-app-icon.svg" alt="" width={34} height={34} />
+      <span className="brand-text">
+        <span className="brand-title">Sankey Explorer</span>
+        <span className="brand-subtitle">for Solace</span>
+      </span>
+    </>
+  );
+  return (
+    <h1 className="brand">
+      {onShowOverview ? (
+        <button
+          type="button"
+          className="brand-button"
+          aria-label="Sankey Explorer for Solace: back to the overview"
+          title="Back to the overview"
+          onClick={onShowOverview}
+        >
+          {content}
+        </button>
+      ) : (
+        content
+      )}
+    </h1>
+  );
 }
 
 function RefreshButton({ isRefreshing, onRefresh }: { isRefreshing: boolean; onRefresh: () => void }) {
@@ -50,16 +81,11 @@ export function TopBar({
   onLogout,
   onSearchSlotMount,
   onExportSlotMount,
+  onShowOverview,
 }: TopBarProps) {
   return (
     <header className="topbar">
-      <div className="brand">
-        <img className="brand-icon" src="/sankey-explorer-app-icon.svg" alt="" width={34} height={34} />
-        <div className="brand-text">
-          <h1 className="brand-title">Sankey Explorer</h1>
-          <span className="brand-subtitle">for Solace</span>
-        </div>
-      </div>
+      <Brand onShowOverview={onShowOverview} />
       <div className="topbar-search" ref={onSearchSlotMount} />
       <div className="topbar-actions">
         {brokers.length > 0 && (

@@ -1,12 +1,15 @@
-import { SempError, SempV2Client } from "./client.js";
+import type { SempV2Client } from "./client.js";
 import { parseHost } from "./parseHost.js";
+import { queryAcrossConnections, type FetchableBrokerConnection } from "./acrossConnections.js";
 import { logError } from "../logger.js";
 import type {
-  BrokerQueryError,
   EndpointInfo,
   EndpointsResponse,
   RawEndpointInfo,
 } from "../../shared/types.js";
+
+// Kept importable from here: the endpoints tests and route import it by this path.
+export type { FetchableBrokerConnection } from "./acrossConnections.js";
 
 /**
  * SEMP v2 Monitor API shapes used here:
@@ -189,52 +192,18 @@ export async function fetchAllEndpoints(
 }
 
 /**
- * What routes/endpoints.ts needs from a broker
- * connection to query it - a structural subset of connectionStore.ts's
- * (unexported) StoredConnection, so listBrokerConnections()'s result can be
- * passed straight in without any adapting.
- */
-export interface FetchableBrokerConnection {
-  client: SempV2Client;
-  vpn: string;
-  label: string;
-  baseUrl: string;
-}
-
-/**
  * Queries every given broker connection in parallel and stamps each
  * resulting endpoint with which connection it came from (brokerLabel/
  * brokerHost) - the combined-multi-broker fetch /api/endpoints needs.
- *
- * One failing broker does not fail the others: its error is reported in
- * `errors` (SEMP errors by message, anything unexpected as a generic string
- * so internals never reach the client) and the rest still come back.
+ * Per-broker failures are isolated - see queryAcrossConnections.
  */
 export async function fetchEndpointsAcrossConnections(
   connections: FetchableBrokerConnection[],
 ): Promise<EndpointsResponse> {
-  const settled = await Promise.allSettled(
-    connections.map(async (conn): Promise<EndpointInfo[]> => {
-      const endpoints = await fetchAllEndpoints(conn.client, conn.vpn);
-      const host = parseHost(conn.baseUrl);
-      return endpoints.map((e) => ({ ...e, brokerLabel: conn.label, brokerHost: host }));
-    }),
-  );
-
-  const endpoints: EndpointInfo[] = [];
-  const errors: BrokerQueryError[] = [];
-  settled.forEach((result, i) => {
-    if (result.status === "fulfilled") {
-      endpoints.push(...result.value);
-      return;
-    }
-    const label = connections[i]!.label;
-    logError(`Querying broker "${label}" failed`, result.reason);
-    errors.push({
-      brokerLabel: label,
-      message: result.reason instanceof SempError ? result.reason.message : "Unexpected error",
-    });
+  const { items, errors } = await queryAcrossConnections(connections, async (conn): Promise<EndpointInfo[]> => {
+    const endpoints = await fetchAllEndpoints(conn.client, conn.vpn);
+    const host = parseHost(conn.baseUrl);
+    return endpoints.map((e) => ({ ...e, brokerLabel: conn.label, brokerHost: host }));
   });
-
-  return { endpoints, errors };
+  return { endpoints: items, errors };
 }

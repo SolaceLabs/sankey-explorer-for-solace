@@ -9,6 +9,7 @@ import { config, SESSION_MAX_AGE_MS } from "./config.js";
 import { authRouter } from "./routes/auth.js";
 import { connectionRouter } from "./routes/connection.js";
 import { endpointsRouter } from "./routes/endpoints.js";
+import { metricsRouter } from "./routes/metrics.js";
 import { logError } from "./logger.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -109,6 +110,7 @@ export async function createServer({
   app.use("/api", authRouter);
   app.use("/api", connectionRouter);
   app.use("/api", endpointsRouter);
+  app.use("/api", metricsRouter);
 
   if (serveClient) {
     if (config.isProduction) {

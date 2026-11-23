@@ -248,6 +248,15 @@ describe("computeSankeyLayout", () => {
     }
   });
 
+  it("reserves room for the live metrics line once metrics are shown", () => {
+    const edges: SankeyEdge[] = [{ source: "orders", target: "Queue: q", value: 1 }];
+    const width = 1600;
+    const rightEdgeFor = (reserve: boolean) =>
+      width - Math.max(...computeSankeyLayout(edges, width, 400, "topic", undefined, undefined, undefined, reserve).nodes.map((n) => n.x1 ?? 0));
+
+    expect(rightEdgeFor(true)).toBeGreaterThan(rightEdgeFor(false) * 2);
+  });
+
   it("'crossing' mode does not just fall back to alphabetical order for a deliberately crossing-heavy layout", () => {
     // s1->t3, s2->t1, s3->t2: alphabetical order on both sides (s1,s2,s3 /
     // t1,t2,t3) crosses every line. A real crossing-minimizing layout

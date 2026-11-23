@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useDisclosure } from "./useDisclosure";
 import type { BrokerConnectionStatus } from "../types";
 
 interface VpnMenuProps {
@@ -24,46 +24,17 @@ const hostOf = (baseUrl: string): string => {
  * plus ordinary buttons. Closes on Escape, an outside click, or an action.
  */
 export function VpnMenu({ brokers, colors, onManage, onDisconnectAll }: VpnMenuProps) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const panelId = useId();
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setOpen(false);
-      buttonRef.current?.focus();
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  const { open, close, rootRef, buttonProps, panelId } = useDisclosure();
 
   const run = (action: () => void) => () => {
-    setOpen(false);
+    close();
     action();
   };
   const summary = brokers.length === 1 ? brokers[0]!.label : `${brokers.length} Message VPNs`;
 
   return (
     <div className="vpn-menu" ref={rootRef}>
-      <button
-        ref={buttonRef}
-        type="button"
-        className="vpn-chip"
-        aria-label={`Message VPNs: ${summary}`}
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen((value) => !value)}
-      >
+      <button {...buttonProps} type="button" className="vpn-chip" aria-label={`Message VPNs: ${summary}`}>
         <span className="vpn-chip-dots" aria-hidden="true">
           {brokers.slice(0, 3).map((b) => (
             <span key={b.id} className="vpn-dot" style={{ background: colors.get(b.label) }} />

@@ -18,6 +18,14 @@ describe("buildDiagramData", () => {
     expect(data.unsubscribedEndpoints).toEqual(["idle-q"]);
   });
 
+  it("remembers broker, type and name of queues and topic endpoints for consumer lookups", () => {
+    const data = buildDiagramData([
+      endpoint("orders-q", ["orders/created"]),
+      { ...endpoint("app-1", ["orders/>"]), type: "direct-subscriber" },
+    ]);
+    expect([...data.consumerLookups]).toEqual([["Queue: orders-q", { brokerLabel: "default", type: "queue", name: "orders-q" }]]);
+  });
+
   it("is empty for no endpoints", () => {
     const data = buildDiagramData([]);
     expect(data.edges).toEqual([]);

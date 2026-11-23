@@ -13,6 +13,7 @@ vi.mock("./api/client", async () => {
       ...actual.api,
       getSession: vi.fn(),
       getEndpoints: vi.fn(),
+      getMetrics: vi.fn(),
       logout: vi.fn(),
       disconnectAll: vi.fn(),
     },
@@ -171,7 +172,7 @@ describe("App - topbar actions once connected", () => {
 
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("combobox", { name: "Find topic or endpoint" })).toBeInTheDocument();
-    expect(within(header).getByRole("heading", { name: "Sankey Explorer" })).toBeInTheDocument();
+    expect(within(header).getByRole("heading", { name: /^Sankey Explorer/ })).toBeInTheDocument();
     // Export sits in the top bar, to the right of Refresh.
     const refresh = within(header).getByRole("button", { name: "Refresh" });
     const exportButton = within(header).getByRole("button", { name: "Export SVG" });
@@ -235,5 +236,95 @@ describe("App - diagram selection", () => {
 
     expect(await screen.findByText("broker unreachable")).toBeInTheDocument();
     expect(details()).toBeInTheDocument();
+  });
+});
+
+describe("App - live metrics", () => {
+  const metricsSample = {
+    sampledAt: 1,
+    errors: [],
+    metrics: [
+      {
+        type: "queue" as const,
+        name: "orders-q",
+        brokerLabel: "default",
+        inbound: { current: 12, oneMinuteAverage: 12 },
+        outbound: { current: 12, oneMinuteAverage: 12 },
+        spool: { usageBytes: 0, quotaBytes: null, unackedMsgCount: 0 },
+        ingressEnabled: true,
+        egressEnabled: true,
+      },
+    ],
+  };
+
+  it("draws live metrics once started, and pauses and clears them when the configuration is reloaded", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+    vi.mocked(api.getMetrics).mockResolvedValue(metricsSample);
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByText("orders-q");
+    expect(api.getMetrics).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Live traffic: off" }));
+    await user.click(screen.getByRole("radio", { name: "15 s" }));
+    expect(await screen.findByText("12/s in · 12/s out")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Live traffic: every 15 s" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/^Updated/);
+    await user.keyboard("{Escape}");
+
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() => expect(screen.queryByText("12/s in · 12/s out")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Live traffic: off" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("");
+  });
+});
+
+describe("App - back to the overview", () => {
+  it("clicking the logo closes the selection and 'Show only this' but keeps the view settings", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByText("orders-q"));
+    await user.click(screen.getByRole("button", { name: "Show only this" }));
+    await user.click(screen.getByRole("button", { name: /^View settings/ }));
+    await user.click(screen.getByRole("radio", { name: /Literal subscriptions/ }));
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByText("orders-q"));
+    expect(screen.getByRole("complementary", { name: "Selection details" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /back to the overview/ }));
+
+    expect(screen.queryByRole("complementary", { name: "Selection details" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back to overview" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View settings: Literal subscriptions" })).toBeInTheDocument();
+    expect(api.getEndpoints).toHaveBeenCalledOnce();
+  });
+
+  it("empties the diagram search", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByText("orders-q");
+    await user.type(screen.getByRole("combobox", { name: "Find topic or endpoint" }), "nothing-like-this");
+
+    await user.click(screen.getByRole("button", { name: /back to the overview/ }));
+
+    expect(screen.getByRole("combobox", { name: "Find topic or endpoint" })).toHaveValue("");
+  });
+
+  it("is only a button once there is a diagram to go back to", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [] }));
+
+    render(<App />);
+    await screen.findByText("Connect to Message VPN");
+
+    expect(screen.queryByRole("button", { name: /back to the overview/ })).not.toBeInTheDocument();
   });
 });

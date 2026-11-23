@@ -6,6 +6,45 @@ All notable changes to this project are documented here
 ## [Unreleased]
 
 ### Added
+- Live SEMP v2 metrics API: `GET /api/metrics` returns one telemetry sample (current and
+  1-minute-average message rates, spool usage and quota, unacked messages, ingress/egress
+  state) for every queue, topic endpoint and client of every connected Message VPN. Three
+  `select`-limited list calls per VPN; one failing broker still yields a partial 200 like
+  `/api/endpoints`. `GET /api/metrics/consumers` lists the consumer flows (`txFlows`) of one
+  queue or topic endpoint on demand. Missing or malformed SEMP fields come back as `null`,
+  never as a fake `0`.
+- Client-side live metrics model: `buildEndpointMetricsMap` maps samples onto diagram node ids
+  (same broker-suffix rule as the nodes), `classifyEndpointActivity` rates each endpoint as
+  unknown / idle / active / backlog (spool growing since the previous sample, at least 80% of its
+  quota, or holding messages with nothing going out), `formatMetrics` renders bounded summaries.
+  `useMetricsPolling` (pure `metricsPollingReducer` inside) polls with a `setTimeout` chain, at
+  most one request in flight, aborts on pause/reset/unmount, keeps the last good sample on
+  errors and pauses and clears itself when its `resetKey` (the loaded configuration) changes.
+- Live metrics overlay in the diagram: toolbar group with start/pause, interval (5 s / 15 s /
+  30 s), "Refresh now", polling state with the time of the last good sample, transient poll and
+  per-broker errors (the last good sample and the diagram stay), and a legend. Endpoints get a
+  status dot (filled green active, filled orange backlog, hollow idle) and a bounded metrics line
+  (`in / out msg/s · spool size and fill level ↑/↓`), whose width the layout reserves once so it
+  doesn't jump per poll; links into receiving endpoints turn green, links into idle ones fade.
+  Node tooltips spell the status out. The detail panel shows the endpoint's rates (current and
+  1-minute average), spool, quota, trend, unacked and ingress/egress state, plus an on-demand
+  consumer list for queues and topic endpoints. Loading a configuration (initial load, Refresh,
+  managing or disconnecting Message VPNs, logout) pauses polling and clears all samples.
+- Diagram toolbar reorganized into two menus with built-in explanations: "View: Data flow"
+  (which flows to draw, each option explained; show direct subscribers; order endpoints by)
+  and "Live traffic: every 15 s / off" (what the feature does, one "Update automatically"
+  choice of Off / 5 s / 15 s / 30 s, last and next update, "Update now", and what each status
+  means). Both share one disclosure behavior with the Message VPN menu (Escape, outside click).
+- Live statuses renamed to Flowing, Piling up and Idle and drawn under each endpoint as icon,
+  word and the numbers behind it (e.g. "Piling up · 80.0 MB waiting · 80% full · growing")
+  instead of a colored dot.
+- New live status "Stale": a queue/topic endpoint holds messages and nothing goes out. "Piling
+  up" now only means consumers are draining it but the spool still grows or is at least 80%
+  full. The status and its numbers moved onto the endpoint name's line, so live metrics no
+  longer add a line under each endpoint (labels overlapped on short bars); the "nothing going
+  out" note is gone, the status says it.
+- Clicking the logo or title goes back to the full overview: it closes the selection, ends
+  "Show only this" and empties the search, keeping the view settings and live traffic.
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
 - Dependabot auto-merge workflow: GitHub's native auto-merge (squash) is enabled for patch and
@@ -43,6 +82,8 @@ All notable changes to this project are documented here
   X-Forwarded-For can't be spoofed to bypass rate limits.
 
 ### Changed
+- `SempV2Client.getVpnCollection` accepts an optional SEMP `select` attribute list; the
+  per-broker error isolation of `/api/endpoints` moved into a shared `queryAcrossConnections`.
 - `ConnectScreen` is split (296 to 155 lines): the form in `ConnectForm`, export/import in
   `ConfigFileActions`, and connecting several entries plus remembering their credentials in
   the tested `lib/brokerConnections.ts` (`connectEach`, `withNewConnectionConfig`).

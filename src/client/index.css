@@ -31,6 +31,13 @@
 
   --error: #E0685C;           /* not from the brand book - see comment above */
 
+  /* Live status colors - same values as ACTIVITY_COLORS in diagramColors.ts
+     (the SVG needs literals for the export). */
+  --activity-flowing: #ABFF88;   /* Bright Green */
+  --activity-piling-up: #FCA829; /* Orange - warning */
+  --activity-stale: #E0685C;     /* same as --error: nothing drains the queue */
+  --activity-idle: rgba(255, 255, 255, 0.75);
+
   /* Three radii, nothing in between: controls are pills, surfaces (cards,
      panels, menus) 20px, entries inside a surface 12px. */
   --radius-pill: 999px;
@@ -119,6 +126,25 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  margin: 0;
+  font-size: inherit;
+}
+
+/* The logo and title as a plain-looking button back to the overview. */
+.brand-button {
+  height: auto;
+  margin: -0.375rem;
+  padding: 0.375rem;
+  gap: 0.75rem;
+  border-radius: var(--radius-inner);
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+
+.brand-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .brand-icon {
@@ -133,6 +159,7 @@ body {
 
 .brand-title {
   margin: 0;
+  color: var(--text);
   font-size: 1.0625rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -647,7 +674,7 @@ input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
   text-align: center;
 }
 
-/* Toolbar: view | direct subscribers | sort ... counts | export.
+/* Toolbar: View menu | Live traffic menu ... counts | export.
    Wraps on narrow screens; the spacer pushes counts/export right. */
 .sankey-toolbar {
   display: flex;
@@ -664,37 +691,6 @@ input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
 
 .toolbar-spacer {
   flex-grow: 1;
-}
-
-.segmented {
-  display: flex;
-  height: var(--control-height);
-  padding: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  border: 1px solid var(--border);
-}
-
-.segmented-option {
-  /* Fills the switch: shared height minus its 4px padding and 1px border. */
-  height: 100%;
-  padding: 0 1rem;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-.segmented-option:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.segmented-option[aria-pressed="true"],
-.segmented-option[aria-pressed="true"]:hover {
-  background: var(--text);
-  color: var(--panel);
-  font-weight: 600;
 }
 
 .toolbar-control,
@@ -1050,4 +1046,355 @@ input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
 .type-badge--ds {
   border: 1.5px solid var(--text);
   color: var(--text);
+}
+
+/* ---------- Live metrics (toolbar group, legend, selection panel) ---------- */
+
+/* Toolbar disclosures (View, Live traffic): a button and a panel below it. */
+.toolbar-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.menu-button {
+  gap: 0.625rem;
+  padding: 0 0.875rem;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.menu-button:hover:not(:disabled),
+.menu-button[aria-expanded="true"] {
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-button--live {
+  border-color: rgba(0, 200, 149, 0.7);
+  background: rgba(0, 200, 149, 0.14);
+}
+
+.menu-button--live:hover:not(:disabled),
+.menu-button--live[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: rgba(0, 200, 149, 0.24);
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--activity-idle);
+}
+
+.live-dot--on {
+  background: var(--activity-flowing);
+  box-shadow: none;
+}
+
+.menu-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 10;
+  width: min(25rem, calc(100vw - 2rem));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.25rem;
+  border-radius: var(--radius-surface);
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.menu-intro,
+.menu-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.menu-title {
+  padding: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.menu-row-label {
+  padding: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.menu-hint {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-dim);
+  white-space: normal;
+}
+
+.menu-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.menu-fieldset > legend {
+  margin-bottom: 0.5rem;
+}
+
+.menu-row {
+  justify-content: space-between;
+  white-space: normal;
+}
+
+/* Options with a line of explanation (View menu). */
+.choice-card {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  border-radius: var(--radius-inner);
+  border: 1px solid var(--border-strong);
+  cursor: pointer;
+}
+
+.choice-card:has(.choice-card-input:checked) {
+  border-color: var(--accent);
+  background: rgba(0, 200, 149, 0.14);
+}
+
+.choice-card-input {
+  margin: 0.2rem 0 0;
+  accent-color: var(--accent);
+}
+
+.choice-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.choice-card-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* "Update automatically": radio buttons drawn as tiles - the native radio
+   stays in the DOM (visually hidden) so keyboard and screen readers work. */
+.choice-tiles {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.choice-tile {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 2.75rem;
+  border-radius: var(--radius-inner);
+  border: 1px solid var(--border-strong);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.choice-tile:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.choice-tile--off {
+  border-style: dashed;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.choice-tile:has(.choice-tile-input:checked) {
+  border: 1px solid var(--accent);
+  background: rgba(0, 200, 149, 0.18);
+  color: var(--text);
+}
+
+.choice-tile:has(.choice-tile-input:focus-visible) {
+  outline: 2px solid var(--accent-hover);
+  outline-offset: 2px;
+}
+
+.choice-tile-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.menu-timing {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+
+.menu-timing .button {
+  flex: none;
+  white-space: nowrap;
+}
+
+.menu-problem {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.menu-legend {
+  list-style: none;
+  margin: 0;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.menu-legend-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+}
+
+.menu-legend-item .activity-icon {
+  flex: none;
+  margin-top: 0.125rem;
+}
+
+.activity-label--flowing {
+  color: var(--activity-flowing);
+}
+
+.activity-label--piling-up {
+  color: var(--activity-piling-up);
+}
+
+.activity-label--stale {
+  color: var(--activity-stale);
+}
+
+.activity-label--idle {
+  color: var(--text);
+}
+
+.live-traffic-status {
+  white-space: nowrap;
+}
+
+/* A long broker error must not push the toolbar apart; the full text is in the title. */
+.live-traffic-problem {
+  min-width: 0;
+}
+
+.live-traffic-problem-text {
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selection-panel-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+
+.selection-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.selection-section-count {
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.metrics-list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: var(--radius-inner);
+  background: rgba(3, 33, 59, 0.55);
+  font-size: 0.75rem;
+}
+
+.metrics-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.metrics-row dt {
+  color: var(--text-dim);
+}
+
+.metrics-row dd {
+  margin: 0;
+  text-align: right;
+  font-family: "Space Mono", monospace;
+}
+
+.pill--activity-flowing {
+  background: rgba(171, 255, 136, 0.15);
+  color: var(--activity-flowing);
+}
+
+.pill--activity-piling-up {
+  background: rgba(252, 168, 41, 0.15);
+  color: var(--activity-piling-up);
+}
+
+.pill--activity-stale {
+  background: rgba(224, 104, 92, 0.16);
+  color: var(--activity-stale);
+}
+
+.pill--activity-idle,
+.pill--activity-unknown {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+}
+
+.consumers-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.consumers-head .selection-section-title {
+  margin: 0;
 }

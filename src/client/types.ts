@@ -8,8 +8,25 @@ export type {
   EndpointInfo,
   EndpointsResponse,
 } from "../shared/types.js";
+export type {
+  ConsumerFlow,
+  ConsumersResponse,
+  DirectSubscriberMetrics,
+  EndpointMetrics,
+  MetricsResponse,
+  RateSample,
+  SpooledEndpointMetrics,
+} from "../shared/metrics.js";
 
 import type { BrokerConnectionStatus } from "../shared/types.js";
+import type { SpooledEndpointMetrics } from "../shared/metrics.js";
+
+/** Which queue or topic endpoint to list consumers for - the identity the metrics carry. */
+export interface ConsumerLookup {
+  brokerLabel: string;
+  type: SpooledEndpointMetrics["type"];
+  name: string;
+}
 
 export interface SessionInfo {
   authRequired: boolean;
