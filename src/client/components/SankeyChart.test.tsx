@@ -15,6 +15,12 @@ const wildcardEdges: SankeyEdge[] = [
 
 const panel = () => screen.getByRole("complementary", { name: "Selection details" });
 
+/** View settings live behind the toolbar's "View: ..." button. */
+async function openViewMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: /^View settings/ }));
+  return screen.getByRole("group", { name: "View settings" });
+}
+
 describe("SankeyChart - empty state", () => {
   it("shows a helpful message instead of an empty diagram when there are no edges", () => {
     render(<SankeyChart edges={[]} />);
@@ -137,13 +143,15 @@ describe("SankeyChart - labels", () => {
 });
 
 describe("SankeyChart - toolbar", () => {
-  it("offers all five sort modes, 'Fewest crossings' first and selected", () => {
+  it("offers all five sort modes in the View menu, 'Fewest crossings' first and selected", async () => {
+    const user = userEvent.setup();
     render(<SankeyChart edges={basicEdges} />);
-    const select = screen.getByLabelText("Sort") as HTMLSelectElement;
+    await openViewMenu(user);
+    const select = screen.getByLabelText("Order endpoints by") as HTMLSelectElement;
     expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
       "Fewest crossings",
       "Topic name",
-      "Endpoint",
+      "Endpoint name",
       "Owner",
       "Message VPN",
     ]);
@@ -153,7 +161,8 @@ describe("SankeyChart - toolbar", () => {
   it("switching sort mode keeps the diagram rendered", async () => {
     const user = userEvent.setup();
     render(<SankeyChart edges={basicEdges} />);
-    await user.selectOptions(screen.getByLabelText("Sort"), "Topic name");
+    await openViewMenu(user);
+    await user.selectOptions(screen.getByLabelText("Order endpoints by"), "Topic name");
     expect(screen.getByText("orders-q")).toBeInTheDocument();
   });
 
@@ -363,7 +372,9 @@ describe("SankeyChart - hover", () => {
   it("in literal mode, hovering the same queue highlights only its declared subscription", async () => {
     const user = userEvent.setup();
     const { container } = render(<SankeyChart edges={wildcardEdges} />);
-    await user.click(screen.getByRole("button", { name: "Literal subscriptions" }));
+    await openViewMenu(user);
+    await user.click(screen.getByRole("radio", { name: /Literal subscriptions/ }));
+    await user.keyboard("{Escape}");
     const svg = screen.getByRole("img", { name: "Topic to endpoint Sankey diagram" });
 
     await user.hover(within(svg).getByText("all-sales-q"));
@@ -479,13 +490,18 @@ describe("SankeyChart - search", () => {
   });
 });
 
-describe("SankeyChart - view mode toggle", () => {
-  it("offers both view modes, defaulting to 'Data flow'", () => {
+describe("SankeyChart - view mode", () => {
+  it("names the current view on the toolbar button and explains both options in the menu", async () => {
+    const user = userEvent.setup();
     render(<SankeyChart edges={wildcardEdges} />);
-    const group = screen.getByRole("group", { name: "View" });
-    const buttons = within(group).getAllByRole("button");
-    expect(buttons.map((b) => b.textContent)).toEqual(["Data flow", "Literal subscriptions"]);
-    expect(buttons[0]).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "View settings: Data flow" })).toHaveAttribute("aria-expanded", "false");
+
+    const menu = await openViewMenu(user);
+
+    const radios = within(menu).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    expect(within(menu).getByRole("radio", { name: /^Data flow/ })).toBeChecked();
+    expect(within(menu).getByText(/wildcards like orders\/> also catch/)).toBeInTheDocument();
   });
 
   it("'Data flow' mode (default) shows the implied wildcard-covered endpoint", () => {
@@ -498,8 +514,10 @@ describe("SankeyChart - view mode toggle", () => {
     const user = userEvent.setup();
     render(<SankeyChart edges={wildcardEdges} />);
 
-    await user.click(screen.getByRole("button", { name: "Literal subscriptions" }));
-    expect(screen.getByRole("button", { name: "Literal subscriptions" })).toHaveAttribute("aria-pressed", "true");
+    await openViewMenu(user);
+    await user.click(screen.getByRole("radio", { name: /Literal subscriptions/ }));
+    expect(screen.getByRole("button", { name: "View settings: Literal subscriptions" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
 
     await user.click(screen.getByText("orders"));
     expect(within(panel()).queryByText("all-sales-q")).not.toBeInTheDocument();
@@ -513,8 +531,20 @@ describe("SankeyChart - view mode toggle", () => {
     await user.click(screen.getByText("orders"));
     expect(panel()).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Literal subscriptions" }));
+    await openViewMenu(user);
+    await user.click(screen.getByRole("radio", { name: /Literal subscriptions/ }));
     expect(screen.queryByRole("complementary", { name: "Selection details" })).not.toBeInTheDocument();
+  });
+
+  it("closes the menu on Escape and returns focus to its button", async () => {
+    const user = userEvent.setup();
+    render(<SankeyChart edges={wildcardEdges} />);
+
+    await openViewMenu(user);
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("group", { name: "View settings" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^View settings/ })).toHaveFocus();
   });
 });
 
@@ -524,9 +554,11 @@ describe("SankeyChart - direct subscribers toggle", () => {
     { source: "acme/sales", target: "Direct Subscriber: my-app-1", value: 1 },
   ];
 
-  it("is on by default, showing direct subscribers alongside other endpoints", () => {
+  it("is on by default, showing direct subscribers alongside other endpoints", async () => {
+    const user = userEvent.setup();
     render(<SankeyChart edges={mixedEdges} />);
-    expect(screen.getByLabelText("Direct subscribers")).toBeChecked();
+    await openViewMenu(user);
+    expect(screen.getByLabelText(/Show direct subscribers/)).toBeChecked();
     expect(screen.getByText("orders-q")).toBeInTheDocument();
     expect(screen.getByText("my-app-1")).toBeInTheDocument();
   });
@@ -534,7 +566,8 @@ describe("SankeyChart - direct subscribers toggle", () => {
   it("switching it off hides direct subscribers, switching it on brings them back", async () => {
     const user = userEvent.setup();
     render(<SankeyChart edges={mixedEdges} />);
-    const toggle = screen.getByLabelText("Direct subscribers");
+    await openViewMenu(user);
+    const toggle = screen.getByLabelText(/Show direct subscribers/);
 
     await user.click(toggle);
     expect(screen.getByText("orders-q")).toBeInTheDocument();
@@ -551,7 +584,8 @@ describe("SankeyChart - direct subscribers toggle", () => {
     await user.click(screen.getByText("orders-q"));
     expect(panel()).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText("Direct subscribers"));
+    await openViewMenu(user);
+    await user.click(screen.getByLabelText(/Show direct subscribers/));
     expect(screen.queryByRole("complementary", { name: "Selection details" })).not.toBeInTheDocument();
   });
 });

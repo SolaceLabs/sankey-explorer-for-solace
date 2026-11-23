@@ -8,7 +8,7 @@ import { buildBrokerColorPalette } from "./lib/buildEndpointBrokerColors";
 import { buildDiagramData } from "./lib/diagramData";
 import { buildLiveMetricsView } from "./lib/liveMetricsView";
 import { useMetricsPolling } from "./components/useMetricsPolling";
-import { MetricsControls } from "./components/MetricsControls";
+import { LiveTrafficMenu } from "./components/LiveTrafficMenu";
 import type { BrokerConfigEntry } from "./lib/brokerConfig";
 import type { BrokerConnectionStatus, BrokerQueryError, EndpointInfo, SessionInfo } from "./types";
 import "./index.css";
@@ -186,7 +186,7 @@ function App() {
               searchSlot={searchSlot}
               exportSlot={exportSlot}
               liveMetrics={liveMetrics}
-              metricsControls={<MetricsControls polling={metricsPolling} />}
+              metricsControls={<LiveTrafficMenu polling={metricsPolling} />}
             />
           </div>
         )}

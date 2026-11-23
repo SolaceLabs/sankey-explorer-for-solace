@@ -6,7 +6,7 @@ import { buildQueueSortKeys } from "./buildQueueSortKeys";
 import { nodeDisplayLabel } from "./nodeDisplayLabel";
 import { endpointDisplayName } from "./endpointDisplayName";
 import { isEndpointNode } from "./nodeKind";
-import { METRICS_SUB_LINE_TEMPLATE } from "./formatMetrics";
+import { LIVE_STATUS_LINE_TEMPLATE } from "./formatMetrics";
 
 export type SortMode = "topic" | "queue" | "owner" | "messageVpn" | "crossing";
 
@@ -20,6 +20,8 @@ const LABEL_GAP_PX = 14; // gap between the bar and the start of the text
 // Endpoint labels start after the Q / TE / DS type badge (see SankeyNode):
 // badge width + the gap after it.
 const ENDPOINT_BADGE_SPACE_PX = 34;
+// The live status line starts with its icon (see SankeyNode): icon + gap.
+const LIVE_STATUS_ICON_SPACE_PX = 16;
 
 function estimateWidth(text: string, fontSize: number): number {
   return text.length * fontSize * CHAR_WIDTH_RATIO + LABEL_GAP_PX;
@@ -62,7 +64,9 @@ function computeLabelMargins(
 
       // Live metrics change every poll: reserve their widest possible line
       // up front so the layout does not jump on each sample.
-      if (reserveMetricsLine) lineWidths.push(estimateWidth(METRICS_SUB_LINE_TEMPLATE, SUB_FONT_SIZE));
+      if (reserveMetricsLine) {
+        lineWidths.push(estimateWidth(LIVE_STATUS_LINE_TEMPLATE, SUB_FONT_SIZE) + LIVE_STATUS_ICON_SPACE_PX);
+      }
 
       maxRightWidth = Math.max(maxRightWidth, Math.max(...lineWidths) + ENDPOINT_BADGE_SPACE_PX);
     } else {

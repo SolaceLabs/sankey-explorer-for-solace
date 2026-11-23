@@ -166,4 +166,32 @@ describe("useMetricsPolling", () => {
     expect(calls[0]!.signal.aborted).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("choosing an interval starts polling at that interval; choosing 'off' pauses", async () => {
+    const fetcher = vi.fn<FetchMetrics>().mockResolvedValue(sample(1));
+    const { result } = renderHook(() => useMetricsPolling(0, fetcher));
+
+    act(() => result.current.choose(30_000));
+    await flush();
+    expect(result.current.state).toMatchObject({ status: "running", intervalMs: 30_000 });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.choose("off"));
+    await advance(60_000);
+    expect(result.current.state.status).toBe("paused");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("knows when the next poll is due while running, and forgets it when paused", async () => {
+    const fetcher = vi.fn<FetchMetrics>().mockResolvedValue(sample(1));
+    const { result } = renderHook(() => useMetricsPolling(0, fetcher));
+
+    act(() => result.current.start());
+    await flush();
+    expect(result.current.state.nextPollAt).toBe(Date.now() + 5_000);
+
+    act(() => result.current.pause());
+    await flush();
+    expect(result.current.state.nextPollAt).toBeNull();
+  });
 });

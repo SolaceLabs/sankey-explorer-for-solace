@@ -34,22 +34,23 @@ const liveView = () =>
   );
 
 describe("SankeyChart - live metrics overlay", () => {
-  it("adds a metrics line, a status dot and link styling per endpoint", () => {
+  it("writes each endpoint's status as icon, word and numbers, and styles the links into it", () => {
     const { container } = render(<SankeyChart edges={edges} liveMetrics={liveView()} />);
 
-    expect(screen.getByText("in 12/s · out 0/s · 3.0 MB 30%")).toBeInTheDocument();
-    expect(screen.getByText("in 0/s")).toBeInTheDocument();
-    // Spool holds messages and nothing goes out: a backlog, not just "active".
-    expect(container.querySelector(".sankey-activity--backlog")).not.toBeNull();
-    expect(container.querySelector(".sankey-activity--idle")).not.toBeNull();
-    expect(container.querySelectorAll(".sankey-link--active")).toHaveLength(1);
+    // Spool holds messages and nothing goes out: piling up, not just flowing.
+    const pilingUp = container.querySelector(".sankey-live--piling-up")!;
+    expect(pilingUp).toHaveTextContent("Piling up");
+    expect(pilingUp).toHaveTextContent("3.0 MB waiting · 30% full · nothing going out");
+    expect(pilingUp.querySelector(".activity-icon--piling-up")).not.toBeNull();
+    expect(container.querySelector(".sankey-live--idle")).toHaveTextContent("Idle");
+    expect(container.querySelectorAll(".sankey-link--flowing")).toHaveLength(1);
     expect(container.querySelectorAll(".sankey-link--idle")).toHaveLength(1);
   });
 
-  it("lets the selected flow outshine active links that are not part of it", async () => {
+  it("lets the selected flow outshine flowing links that are not part of it", async () => {
     const user = userEvent.setup();
     const { container } = render(<SankeyChart edges={edges} liveMetrics={liveView()} />);
-    const activeLink = () => container.querySelector(".sankey-link--active")!;
+    const activeLink = () => container.querySelector(".sankey-link--flowing")!;
     expect(activeLink()).toHaveAttribute("stroke-opacity", "0.5");
 
     await user.click(screen.getByText("app-1"));
@@ -59,13 +60,13 @@ describe("SankeyChart - live metrics overlay", () => {
 
   it("puts the status into the node tooltip, so it is not carried by color alone", () => {
     render(<SankeyChart edges={edges} liveMetrics={liveView()} />);
-    expect(screen.getByText(/Live: Backlog/, { selector: "title" })).toBeInTheDocument();
+    expect(screen.getByText(/Live: Piling up/, { selector: "title" })).toBeInTheDocument();
   });
 
   it("draws nothing extra before the first sample", () => {
     const { container } = render(<SankeyChart edges={edges} liveMetrics={null} />);
-    expect(container.querySelector(".sankey-activity")).toBeNull();
-    expect(container.querySelector(".sankey-link--active, .sankey-link--idle")).toBeNull();
+    expect(container.querySelector(".sankey-live")).toBeNull();
+    expect(container.querySelector(".sankey-link--flowing, .sankey-link--idle")).toBeNull();
   });
 
   it("shows the endpoint's live metrics in the detail panel", async () => {
@@ -76,7 +77,7 @@ describe("SankeyChart - live metrics overlay", () => {
 
     const panel = screen.getByRole("complementary", { name: "Selection details" });
     const section = within(panel).getByRole("region", { name: "Live metrics" });
-    expect(within(section).getByText("Backlog")).toBeInTheDocument();
+    expect(within(section).getByText("Piling up")).toBeInTheDocument();
     expect(within(section).getByText("12 msg/s (1 min avg 10)")).toBeInTheDocument();
     expect(within(section).getByText("10.0 MB (30% used)")).toBeInTheDocument();
   });

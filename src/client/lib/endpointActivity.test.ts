@@ -41,29 +41,29 @@ describe("classifyEndpointActivity", () => {
     expect(classifyEndpointActivity(clientMetrics()).status).toBe("idle");
   });
 
-  it("is 'active' while messages flow through and the spool drains", () => {
+  it("is 'flowing' while messages flow through and the spool drains", () => {
     const activity = classifyEndpointActivity(queueMetrics({ inbound: rate(50), outbound: rate(50) }));
-    expect(activity).toMatchObject({ status: "active", receiving: true });
-    expect(classifyEndpointActivity(clientMetrics({ inbound: rate(4) })).status).toBe("active");
+    expect(activity).toMatchObject({ status: "flowing", receiving: true });
+    expect(classifyEndpointActivity(clientMetrics({ inbound: rate(4) })).status).toBe("flowing");
   });
 
-  it("flags a growing spool as 'backlog' even while consumers are draining it", () => {
+  it("flags a growing spool as 'piling up' even while consumers are draining it", () => {
     const previous = queueMetrics({ spool: { usageBytes: 1 * MB, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
     const current = queueMetrics({ inbound: rate(80), outbound: rate(50), spool: { usageBytes: 2 * MB, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
 
-    expect(classifyEndpointActivity(current, previous)).toMatchObject({ status: "backlog", trend: "growing", fillRatio: 0.02 });
+    expect(classifyEndpointActivity(current, previous)).toMatchObject({ status: "piling-up", trend: "growing", fillRatio: 0.02 });
   });
 
-  it("flags spooled messages that nothing is consuming as 'backlog'", () => {
+  it("flags spooled messages that nothing is consuming as 'piling up'", () => {
     const stuck = queueMetrics({ spool: { usageBytes: 512, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
-    expect(classifyEndpointActivity(stuck).status).toBe("backlog");
+    expect(classifyEndpointActivity(stuck).status).toBe("piling-up");
   });
 
-  it("flags a spool at 80% or more of its quota as 'backlog' even when shrinking", () => {
+  it("flags a spool at 80% or more of its quota as 'piling up' even when shrinking", () => {
     const previous = queueMetrics({ spool: { usageBytes: 90 * MB, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
     const current = queueMetrics({ outbound: rate(100), spool: { usageBytes: 85 * MB, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
 
-    expect(classifyEndpointActivity(current, previous)).toMatchObject({ status: "backlog", trend: "shrinking" });
+    expect(classifyEndpointActivity(current, previous)).toMatchObject({ status: "piling-up", trend: "shrinking" });
   });
 
   it("has no fill level without a quota", () => {

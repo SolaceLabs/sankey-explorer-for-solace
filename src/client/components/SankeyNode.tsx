@@ -3,8 +3,9 @@ import type { SankeyLinkDatum, SankeyNodeDatum } from "../lib/sankeyLayout";
 import { endpointDisplayName } from "../lib/endpointDisplayName";
 import { nodeDisplayLabel } from "../lib/nodeDisplayLabel";
 import { endpointTypeCode, endpointTypeLabel } from "../lib/nodeKind";
-import { ACTIVITY_DOTS, BADGE_COLORS, DIAGRAM_COLORS } from "../lib/diagramColors";
-import type { EndpointActivity } from "../lib/endpointActivity";
+import { ACTIVITY_COLORS, BADGE_COLORS, DIAGRAM_COLORS } from "../lib/diagramColors";
+import type { LiveStatusLine } from "../lib/formatMetrics";
+import { ActivityIcon } from "./ActivityIcon";
 
 /** Badge geometry - sankeyLayout reserves ENDPOINT_BADGE_SPACE for it. */
 const BADGE_WIDTH = 26;
@@ -13,7 +14,8 @@ const BADGE_GAP = 8;
 const LABEL_OFFSET = 6;
 const LINE_HEIGHT = 12;
 const DIMMED_OPACITY = 0.35;
-const ACTIVITY_DOT_RADIUS = 4;
+const LIVE_ICON_SIZE = 11;
+const LIVE_ICON_GAP = 5;
 
 interface SankeyNodeProps {
   node: LayoutNode<SankeyNodeDatum, SankeyLinkDatum>;
@@ -23,8 +25,8 @@ interface SankeyNodeProps {
   isDimmed: boolean;
   color: string;
   subLines: string[];
-  /** Live metrics verdict; draws a status dot on the bar unless "unknown". */
-  activity?: EndpointActivity | undefined;
+  /** Live status (icon, word, numbers), drawn as the last line under an endpoint. */
+  liveLine?: LiveStatusLine | null | undefined;
   /** Extra lines for the hover tooltip (live metrics). */
   tooltipLines?: string[];
   onHover: (nodeId: string | null) => void;
@@ -43,7 +45,7 @@ export function SankeyNode({
   isDimmed,
   color,
   subLines,
-  activity,
+  liveLine,
   tooltipLines = [],
   onHover,
   onSelect,
@@ -58,7 +60,9 @@ export function SankeyNode({
   // Thin, low-value nodes stay easy to hit: min. 10px tall, 2px wider each side.
   const visualHeight = Math.max(1, y1 - y0);
   const hitHeight = Math.max(10, visualHeight);
-  const blockStartY = (y0 + y1) / 2 - (subLines.length * LINE_HEIGHT) / 2;
+  const lineCount = subLines.length + (liveLine ? 1 : 0);
+  const blockStartY = (y0 + y1) / 2 - (lineCount * LINE_HEIGHT) / 2;
+  const liveLineY = blockStartY + (subLines.length + 1) * LINE_HEIGHT;
   const textX = isEndpoint ? x1 + LABEL_OFFSET + (code ? BADGE_WIDTH + BADGE_GAP : 0) : x0 - LABEL_OFFSET;
   const hover = {
     onMouseEnter: () => onHover(node.id),
@@ -95,18 +99,6 @@ export function SankeyNode({
       >
         <title>{[node.id, ...tooltipLines, "(click for details)"].join("\n")}</title>
       </rect>
-      {activity && activity.status !== "unknown" && (
-        <circle
-          className={`sankey-activity sankey-activity--${activity.status}`}
-          cx={(x0 + x1) / 2}
-          cy={(y0 + y1) / 2}
-          r={ACTIVITY_DOT_RADIUS}
-          fill={ACTIVITY_DOTS[activity.status].fill}
-          stroke={ACTIVITY_DOTS[activity.status].stroke}
-          strokeWidth={1.5}
-          style={{ pointerEvents: "none" }}
-        />
-      )}
       {code && (
         <g className="sankey-badge" {...hover}>
           <title>{endpointTypeLabel(node.id)}</title>
@@ -163,6 +155,21 @@ export function SankeyNode({
           {line}
         </text>
       ))}
+      {liveLine && (
+        <g className={`sankey-live sankey-live--${liveLine.status}`} {...hover}>
+          <ActivityIcon status={liveLine.status} size={LIVE_ICON_SIZE} x={textX} y={liveLineY - LIVE_ICON_SIZE / 2} />
+          <text x={textX + LIVE_ICON_SIZE + LIVE_ICON_GAP} y={liveLineY} dy="0.32em" textAnchor="start" fontSize={10}>
+            <tspan fontFamily='"Figtree", sans-serif' fontWeight={700} fill={ACTIVITY_COLORS[liveLine.status]}>
+              {liveLine.label}
+            </tspan>
+            {liveLine.detail && (
+              <tspan dx={6} fontFamily='"Space Mono", monospace' fill={DIAGRAM_COLORS.subLabel}>
+                {liveLine.detail}
+              </tspan>
+            )}
+          </text>
+        </g>
+      )}
     </g>
   );
 }

@@ -10,12 +10,17 @@ import {
 
 export type FetchMetrics = (signal: AbortSignal) => Promise<MetricsResponse>;
 
+/** What the "Update automatically" choice can be: off, or one of the intervals. */
+export type UpdateChoice = PollIntervalMs | "off";
+
 export interface MetricsPolling {
   state: MetricsPollingState;
   start: () => void;
   pause: () => void;
   refreshNow: () => void;
   setIntervalMs: (intervalMs: PollIntervalMs) => void;
+  /** "off" pauses; an interval sets it and starts polling (one choice, not switch + interval). */
+  choose: (choice: UpdateChoice) => void;
 }
 
 const isAbort = (err: unknown): boolean => err instanceof DOMException && err.name === "AbortError";
@@ -71,14 +76,18 @@ export function useMetricsPolling(resetKey: number, fetchMetrics: FetchMetrics =
       } finally {
         if (inFlight === controller) inFlight = undefined;
       }
-      if (!disposed && status === "running") timer = setTimeout(() => void poll(), intervalMs);
+      if (!disposed && status === "running") schedule();
+    };
+    const schedule = () => {
+      timer = setTimeout(() => void poll(), intervalMs);
+      dispatch({ type: "scheduled", at: Date.now() + intervalMs });
     };
 
     if (fetchRequest !== servedRequest.current) {
       servedRequest.current = fetchRequest;
       void poll();
     } else if (status === "running") {
-      timer = setTimeout(() => void poll(), intervalMs);
+      schedule();
     }
 
     return () => {
@@ -97,5 +106,13 @@ export function useMetricsPolling(resetKey: number, fetchMetrics: FetchMetrics =
     pause: () => dispatch({ type: "pause" }),
     refreshNow: () => dispatch({ type: "refreshNow" }),
     setIntervalMs: (ms) => dispatch({ type: "setInterval", intervalMs: ms }),
+    choose: (choice) => {
+      if (choice === "off") {
+        dispatch({ type: "pause" });
+        return;
+      }
+      dispatch({ type: "setInterval", intervalMs: choice });
+      dispatch({ type: "start" });
+    },
   };
 }

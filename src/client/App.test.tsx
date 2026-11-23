@@ -267,14 +267,17 @@ describe("App - live metrics", () => {
     await screen.findByText("orders-q");
     expect(api.getMetrics).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole("button", { name: "Start live metrics" }));
-    expect(await screen.findByText("in 12/s · out 12/s · 0 B")).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent(/^Live · updated/);
+    await user.click(screen.getByRole("button", { name: "Live traffic: off" }));
+    await user.click(screen.getByRole("radio", { name: "15 s" }));
+    expect(await screen.findByText("12/s in · 12/s out")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Live traffic: every 15 s" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/^Updated/);
+    await user.keyboard("{Escape}");
 
     await user.click(screen.getByRole("button", { name: "Refresh" }));
 
-    await waitFor(() => expect(screen.queryByText("in 12/s · out 12/s · 0 B")).not.toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "Start live metrics" })).toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("Paused");
+    await waitFor(() => expect(screen.queryByText("12/s in · 12/s out")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Live traffic: off" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("");
   });
 });

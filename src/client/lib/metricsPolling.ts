@@ -18,6 +18,8 @@ export interface MetricsPollingState {
   /** Message of the latest failed poll; cleared by the next success. */
   error: string | null;
   isFetching: boolean;
+  /** Client time the next automatic poll is due; null while paused or fetching. */
+  nextPollAt: number | null;
   /**
    * Increments for every request to fetch NOW (start, "Refresh now", a new
    * interval while running). The polling effect fetches immediately when it
@@ -37,6 +39,8 @@ export type MetricsPollingAction =
   | { type: "fetchFailed"; message: string }
   /** The in-flight request was aborted (pause, restart, reset) - no result will come. */
   | { type: "fetchCancelled" }
+  /** The next automatic poll was scheduled for `at` (null: none pending). */
+  | { type: "scheduled"; at: number | null }
   | { type: "reset" };
 
 export const initialMetricsPollingState = (intervalMs: PollIntervalMs = DEFAULT_POLL_INTERVAL_MS): MetricsPollingState => ({
@@ -47,6 +51,7 @@ export const initialMetricsPollingState = (intervalMs: PollIntervalMs = DEFAULT_
   lastSuccessAt: null,
   error: null,
   isFetching: false,
+  nextPollAt: null,
   fetchRequest: 0,
 });
 
@@ -57,7 +62,7 @@ export function metricsPollingReducer(state: MetricsPollingState, action: Metric
       if (state.status === "running") return state;
       return { ...state, status: "running", fetchRequest: state.fetchRequest + 1 };
     case "pause":
-      return state.status === "paused" ? state : { ...state, status: "paused" };
+      return state.status === "paused" ? state : { ...state, status: "paused", nextPollAt: null };
     case "refreshNow":
       return { ...state, fetchRequest: state.fetchRequest + 1 };
     case "setInterval":
@@ -69,7 +74,9 @@ export function metricsPollingReducer(state: MetricsPollingState, action: Metric
         fetchRequest: state.status === "running" ? state.fetchRequest + 1 : state.fetchRequest,
       };
     case "fetchStarted":
-      return { ...state, isFetching: true };
+      return { ...state, isFetching: true, nextPollAt: null };
+    case "scheduled":
+      return state.nextPollAt === action.at ? state : { ...state, nextPollAt: action.at };
     case "fetchSucceeded":
       return {
         ...state,

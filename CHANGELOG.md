@@ -30,6 +30,14 @@ All notable changes to this project are documented here
   1-minute average), spool, quota, trend, unacked and ingress/egress state, plus an on-demand
   consumer list for queues and topic endpoints. Loading a configuration (initial load, Refresh,
   managing or disconnecting Message VPNs, logout) pauses polling and clears all samples.
+- Diagram toolbar reorganized into two menus with built-in explanations: "View: Data flow"
+  (which flows to draw, each option explained; show direct subscribers; order endpoints by)
+  and "Live traffic: every 15 s / off" (what the feature does, one "Update automatically"
+  choice of Off / 5 s / 15 s / 30 s, last and next update, "Update now", and what each status
+  means). Both share one disclosure behavior with the Message VPN menu (Escape, outside click).
+- Live statuses renamed to Flowing, Piling up and Idle and drawn under each endpoint as icon,
+  word and the numbers behind it (e.g. "Piling up · 80.0 MB waiting · 80% full · growing")
+  instead of a colored dot.
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
 - Dependabot auto-merge workflow: GitHub's native auto-merge (squash) is enabled for patch and

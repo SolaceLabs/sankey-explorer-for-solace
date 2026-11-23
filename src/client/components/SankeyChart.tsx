@@ -13,7 +13,7 @@ import { isEndpointNode } from "../lib/nodeKind";
 import { nodeFillColor } from "../lib/diagramColors";
 import type { SankeyEdge } from "../../shared/toSankeyEdges";
 import { activityTooltip, linkActivityOf, liveDetailsFor, type LiveMetricsView } from "../lib/liveMetricsView";
-import { metricsSubLine } from "../lib/formatMetrics";
+import { liveStatusLine } from "../lib/formatMetrics";
 import type { ConsumerLookup } from "../types";
 import { DiagramToolbar } from "./DiagramToolbar";
 import { DiagramSearch } from "./DiagramSearch";
@@ -198,8 +198,8 @@ export function SankeyChart({
                       // just adds the gradient to the hovered flow.
                       isDimmed={Boolean(!hoveredNodeId && highlight && !highlight.nodeIds.has(node.id))}
                       color={nodeFillColor(node.id, endpointBrokerColors)}
-                      subLines={metrics && activity ? [...staticLines, metricsSubLine(metrics, activity)] : staticLines}
-                      activity={activity}
+                      subLines={staticLines}
+                      liveLine={metrics && activity ? liveStatusLine(metrics, activity) : null}
                       tooltipLines={activityTooltip(metrics, activity)}
                       onHover={setHoveredNodeId}
                       onSelect={(id) => select(id)}

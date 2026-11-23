@@ -72,4 +72,11 @@ describe("metricsPollingReducer", () => {
     const idle = initialMetricsPollingState();
     expect(metricsPollingReducer(idle, { type: "fetchCancelled" })).toBe(idle);
   });
+
+  it("tracks the next scheduled poll and drops it on pause and when a fetch starts", () => {
+    const scheduled = reduce(initialMetricsPollingState(), { type: "start" }, { type: "scheduled", at: 5000 });
+    expect(scheduled.nextPollAt).toBe(5000);
+    expect(metricsPollingReducer(scheduled, { type: "pause" }).nextPollAt).toBeNull();
+    expect(metricsPollingReducer(scheduled, { type: "fetchStarted" }).nextPollAt).toBeNull();
+  });
 });

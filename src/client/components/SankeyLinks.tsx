@@ -28,12 +28,12 @@ interface SankeyLinksProps {
  */
 /**
  * Normal look, then the live-metrics variants. The highlighted flow wins
- * over all of them; while one is highlighted, active links step back to
+ * over all of them; while one is highlighted, flowing links step back to
  * the normal strength so they don't outshine it.
  */
 const LINK_STYLES: Record<LinkActivity | "default", { stroke: string; opacity: number; opacityBehindHighlight: number }> = {
   default: { stroke: DIAGRAM_COLORS.flow, opacity: 0.2, opacityBehindHighlight: 0.2 },
-  active: { stroke: ACTIVE_FLOW_COLOR, opacity: 0.5, opacityBehindHighlight: 0.2 },
+  flowing: { stroke: ACTIVE_FLOW_COLOR, opacity: 0.5, opacityBehindHighlight: 0.2 },
   idle: { stroke: DIAGRAM_COLORS.flow, opacity: 0.08, opacityBehindHighlight: 0.08 },
 };
 
@@ -72,7 +72,7 @@ export function SankeyLinks({ links, diagramWidth, highlightedEdgeKeys, linkActi
                 onMouseLeave={() => onHover(null)}
                 onClick={() => onSelect(targetId)}
               >
-                {live && <title>{`${targetId}: ${live === "active" ? "receiving messages now" : "no messages arriving"}`}</title>}
+                {live && <title>{`${targetId}: ${live === "flowing" ? "receiving messages now" : "no messages arriving"}`}</title>}
               </path>
               <path
                 className={live ? `sankey-link sankey-link--${live}` : "sankey-link"}

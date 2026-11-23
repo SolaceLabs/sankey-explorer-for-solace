@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { METRICS_SUB_LINE_TEMPLATE, formatBytes, formatPercent, formatRate, metricsSubLine } from "./formatMetrics";
+import { LIVE_STATUS_LINE_TEMPLATE, formatBytes, formatPercent, formatRate, liveStatusLine } from "./formatMetrics";
 import { classifyEndpointActivity } from "./endpointActivity";
 import { clientMetrics, queueMetrics } from "./metricsFixtures";
 
@@ -34,38 +34,58 @@ describe("formatPercent", () => {
   });
 });
 
-describe("metricsSubLine", () => {
-  it("summarizes a queue's rates, spool and fill level", () => {
+describe("liveStatusLine", () => {
+  const MB = 1024 * 1024;
+
+  it("shows a flowing queue's in and out rates", () => {
     const metrics = queueMetrics({
       inbound: { current: 120, oneMinuteAverage: 100 },
-      outbound: { current: 80, oneMinuteAverage: 90 },
-      spool: { usageBytes: 45 * 1024 * 1024, quotaBytes: 100 * 1024 * 1024, unackedMsgCount: 2 },
+      outbound: { current: 118, oneMinuteAverage: 90 },
+      spool: { usageBytes: 2 * MB, quotaBytes: 100 * MB, unackedMsgCount: 2 },
     });
-    expect(metricsSubLine(metrics, classifyEndpointActivity(metrics))).toBe("in 120/s · out 80/s · 45.0 MB 45%");
+    expect(liveStatusLine(metrics, classifyEndpointActivity(metrics))).toEqual({
+      status: "flowing",
+      label: "Flowing",
+      detail: "120/s in · 118/s out",
+    });
   });
 
-  it("marks a growing spool and copes with missing values", () => {
-    const previous = queueMetrics({ spool: { usageBytes: 0, quotaBytes: null, unackedMsgCount: null } });
+  it("explains why a queue is piling up: what waits, how full, and the trend", () => {
+    const previous = queueMetrics({ spool: { usageBytes: 70 * MB, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
     const metrics = queueMetrics({
-      inbound: { current: null, oneMinuteAverage: null },
-      spool: { usageBytes: 2048, quotaBytes: null, unackedMsgCount: null },
+      inbound: { current: 40, oneMinuteAverage: 40 },
+      outbound: { current: 5, oneMinuteAverage: 5 },
+      spool: { usageBytes: 80 * MB, quotaBytes: 100 * MB, unackedMsgCount: 0 },
     });
-    expect(metricsSubLine(metrics, classifyEndpointActivity(metrics, previous))).toBe("in n/a/s · out 0/s · 2.0 KB ↑");
+    expect(liveStatusLine(metrics, classifyEndpointActivity(metrics, previous))).toEqual({
+      status: "piling-up",
+      label: "Piling up",
+      detail: "80.0 MB waiting · 80% full · growing",
+    });
   });
 
-  it("shows only the delivery rate for a direct subscriber", () => {
-    const metrics = clientMetrics({ inbound: { current: 7, oneMinuteAverage: 7 } });
-    expect(metricsSubLine(metrics, classifyEndpointActivity(metrics))).toBe("in 7/s");
+  it("says 'nothing going out' for a stuck queue without a trend or quota", () => {
+    const metrics = queueMetrics({ spool: { usageBytes: 2048, quotaBytes: null, unackedMsgCount: 0 } });
+    expect(liveStatusLine(metrics, classifyEndpointActivity(metrics))?.detail).toBe("2.0 KB waiting · nothing going out");
+  });
+
+  it("shows only the word for idle, only the delivery rate for a direct subscriber, and nothing when unknown", () => {
+    const idle = queueMetrics();
+    expect(liveStatusLine(idle, classifyEndpointActivity(idle))).toEqual({ status: "idle", label: "Idle", detail: "" });
+
+    const ds = clientMetrics({ inbound: { current: 7, oneMinuteAverage: 7 } });
+    expect(liveStatusLine(ds, classifyEndpointActivity(ds))?.detail).toBe("7/s in");
+
+    const blank = clientMetrics({ inbound: { current: null, oneMinuteAverage: null } });
+    expect(liveStatusLine(blank, classifyEndpointActivity(blank))).toBeNull();
   });
 
   it("never produces a line wider than the template the layout reserves", () => {
     const metrics = queueMetrics({
-      inbound: { current: 999_949, oneMinuteAverage: null },
-      outbound: { current: 999_949, oneMinuteAverage: null },
-      spool: { usageBytes: 1023.9 * 1024 * 1024, quotaBytes: 1024 * 1024 * 1024, unackedMsgCount: 0 },
+      outbound: { current: 0, oneMinuteAverage: 0 },
+      spool: { usageBytes: 1023.9 * MB, quotaBytes: 1024 * MB, unackedMsgCount: 0 },
     });
-    const previous = queueMetrics({ spool: { usageBytes: 0, quotaBytes: null, unackedMsgCount: 0 } });
-    const line = metricsSubLine(metrics, classifyEndpointActivity(metrics, previous));
-    expect(line.length).toBeLessThanOrEqual(METRICS_SUB_LINE_TEMPLATE.length);
+    const line = liveStatusLine(metrics, classifyEndpointActivity(metrics))!;
+    expect(`${line.label}  ${line.detail}`.length).toBeLessThanOrEqual(LIVE_STATUS_LINE_TEMPLATE.length);
   });
 });

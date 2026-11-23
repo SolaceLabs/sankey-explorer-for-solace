@@ -1,6 +1,5 @@
 import type { EndpointMetrics, RateSample } from "../types";
-import type { EndpointActivity } from "./endpointActivity";
-import { effectiveRate } from "./endpointActivity";
+import { effectiveRate, type EndpointActivity } from "./endpointActivity";
 
 const UNKNOWN = "n/a";
 
@@ -33,33 +32,56 @@ export const formatPercent = (ratio: number | null): string =>
 
 const rate = (sample: RateSample): string => formatRate(effectiveRate(sample));
 
-const TREND_MARKS: Record<EndpointActivity["trend"], string> = {
-  growing: " ↑",
-  shrinking: " ↓",
-  steady: "",
-  unknown: "",
-};
-
-/**
- * The one-line summary drawn under an endpoint in the diagram, e.g.
- * "in 120/s · out 80/s · 3.2 MB 45% ↑". Kept short and bounded: it sits in
- * the label column, whose width is reserved up front (see sankeyLayout).
- */
-export function metricsSubLine(metrics: EndpointMetrics, activity: EndpointActivity): string {
-  if (metrics.type === "direct-subscriber") return `in ${rate(metrics.inbound)}/s`;
-  const spool = `${formatBytes(metrics.spool.usageBytes)}${activity.fillRatio === null ? "" : ` ${formatPercent(activity.fillRatio)}`}`;
-  return `in ${rate(metrics.inbound)}/s · out ${rate(metrics.outbound)}/s · ${spool}${TREND_MARKS[activity.trend]}`;
+/** What the diagram shows under an endpoint: the status word and the numbers behind it. */
+export interface LiveStatusLine {
+  status: Exclude<EndpointActivity["status"], "unknown">;
+  label: string;
+  /** Empty for "Idle" - the word says it all. */
+  detail: string;
 }
-
-/** The widest line metricsSubLine is expected to produce - used to reserve label width. */
-export const METRICS_SUB_LINE_TEMPLATE = "in 999.9k/s · out 999.9k/s · 1023.9 MB 100% ↑";
 
 export const ACTIVITY_LABELS: Record<EndpointActivity["status"], string> = {
   unknown: "No live data",
   idle: "Idle",
-  active: "Active",
-  backlog: "Backlog",
+  flowing: "Flowing",
+  "piling-up": "Piling up",
 };
+
+/** One sentence per status, for the legend and the selection panel. */
+export const ACTIVITY_DESCRIPTIONS: Record<LiveStatusLine["status"], string> = {
+  flowing: "messages are arriving or being delivered right now.",
+  "piling-up": "messages wait in the queue and are not being drained.",
+  idle: "nothing in, nothing out.",
+};
+
+function pilingUpDetail(metrics: Extract<EndpointMetrics, { spool: unknown }>, activity: EndpointActivity): string {
+  const parts = [`${formatBytes(metrics.spool.usageBytes)} waiting`];
+  if (activity.fillRatio !== null) parts.push(`${formatPercent(activity.fillRatio)} full`);
+  if (activity.trend === "growing" || activity.trend === "shrinking") parts.push(activity.trend);
+  else if (!activity.sending) parts.push("nothing going out");
+  return parts.join(" · ");
+}
+
+/**
+ * The status line under an endpoint, e.g. "Piling up · 80.0 MB waiting ·
+ * 80% full · growing", or null when there is nothing known to show. Kept
+ * bounded: it sits in the label column, whose width the layout reserves
+ * up front (LIVE_STATUS_LINE_TEMPLATE).
+ */
+export function liveStatusLine(metrics: EndpointMetrics, activity: EndpointActivity): LiveStatusLine | null {
+  if (activity.status === "unknown") return null;
+  const label = ACTIVITY_LABELS[activity.status];
+  if (activity.status === "idle") return { status: "idle", label, detail: "" };
+  if (activity.status === "piling-up" && metrics.type !== "direct-subscriber") {
+    return { status: "piling-up", label, detail: pilingUpDetail(metrics, activity) };
+  }
+  const inbound = `${rate(metrics.inbound)}/s in`;
+  const detail = metrics.type === "direct-subscriber" ? inbound : `${inbound} · ${rate(metrics.outbound)}/s out`;
+  return { status: activity.status, label, detail };
+}
+
+/** The widest line liveStatusLine is expected to produce (label and detail) - used to reserve label width. */
+export const LIVE_STATUS_LINE_TEMPLATE = "Piling up  1023.9 MB waiting · 100% full · nothing going out";
 
 /** Time of a sample for the toolbar, in the viewer's locale. */
 export const formatSampleTime = (epochMs: number): string =>

@@ -35,16 +35,17 @@ export const DIAGRAM_COLORS = {
 } as const;
 
 /**
- * Live metrics overlay: the status dot on an endpoint bar and the links
- * into it. Active and backlog are FILLED dots (Bright Green - the
- * selection is an outline around the whole bar, so the two never look
- * alike - and the brand orange that already means "warning"); idle is a
- * hollow ring, so the states differ in shape too, not only in color.
+ * Live status colors - the icon and word under an endpoint, the legend and
+ * the detail panel. Flowing reuses the brand's Bright Green (the selection
+ * is an outline around the whole bar, never text, so the two don't
+ * collide); piling up is the brand orange that already means "warning".
+ * Every status also has its own icon and word, so color is never the only
+ * signal.
  */
-export const ACTIVITY_DOTS: Readonly<Record<"active" | "backlog" | "idle", { fill: string; stroke: string }>> = {
-  active: { fill: BRAND.brightGreen, stroke: BRAND.darkBlue },
-  backlog: { fill: BRAND.orange, stroke: BRAND.darkBlue },
-  idle: { fill: BRAND.darkBlue, stroke: "rgba(255, 255, 255, 0.75)" },
+export const ACTIVITY_COLORS: Readonly<Record<"flowing" | "piling-up" | "idle", string>> = {
+  flowing: BRAND.brightGreen,
+  "piling-up": BRAND.orange,
+  idle: "rgba(255, 255, 255, 0.75)",
 };
 
 /** Links into an endpoint that is receiving messages right now. */

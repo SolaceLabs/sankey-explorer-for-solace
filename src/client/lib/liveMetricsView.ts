@@ -1,4 +1,5 @@
 import type { EndpointInfo, EndpointMetrics, MetricsResponse } from "../types";
+import type { MetricsPollingState } from "./metricsPolling";
 import { buildEndpointMetricsMap } from "./buildEndpointMetricsMap";
 import { classifyAll, type EndpointActivity } from "./endpointActivity";
 import { ACTIVITY_LABELS, formatBytes, formatPercent, formatRate } from "./formatMetrics";
@@ -27,16 +28,16 @@ export function buildLiveMetricsView(
 }
 
 /**
- * How a link INTO an endpoint is drawn. SEMP reports rates per endpoint,
+ * How a link INTO an endpoint is drawn ("flowing": the endpoint is receiving). SEMP reports rates per endpoint,
  * never per subscription or topic, so only that last hop can honestly be
  * called active: it carries whatever the endpoint is currently receiving.
  */
-export type LinkActivity = "active" | "idle";
+export type LinkActivity = "flowing" | "idle";
 
 export function linkActivityOf(view: LiveMetricsView | null, targetId: string): LinkActivity | null {
   const activity = view?.activity.get(targetId);
   if (!activity || activity.status === "unknown") return null;
-  return activity.receiving ? "active" : "idle";
+  return activity.receiving ? "flowing" : "idle";
 }
 
 const TREND_WORDS: Record<EndpointActivity["trend"], string | null> = {
@@ -64,4 +65,18 @@ export function activityTooltip(metrics: EndpointMetrics | undefined, activity: 
 export function liveDetailsFor(view: LiveMetricsView | null | undefined, nodeId: string) {
   if (view === undefined) return undefined;
   return { hasSample: view !== null, metrics: view?.byNodeId.get(nodeId), activity: view?.activity.get(nodeId) };
+}
+
+/**
+ * What went wrong lately, for the toolbar: the last failed poll and/or the
+ * brokers missing from an otherwise good sample. Null when all is well.
+ */
+export function liveProblemText(state: Pick<MetricsPollingState, "error" | "current">): string | null {
+  const problems: string[] = [];
+  if (state.error) problems.push(`Last poll failed: ${state.error}`);
+  const brokerErrors = state.current?.errors ?? [];
+  if (brokerErrors.length > 0) {
+    problems.push(`No metrics from ${brokerErrors.map((e) => `${e.brokerLabel} (${e.message})`).join(", ")}`);
+  }
+  return problems.length > 0 ? problems.join(". ") : null;
 }

@@ -1,13 +1,14 @@
 import type { EndpointMetrics, RateSample } from "../types";
 
 /**
+ * The terms are the UI's own ("Flowing", "Piling up", "Idle"):
  * - "unknown": no usable sample for this endpoint
  * - "idle": known, and no messages moving
- * - "active": messages are flowing in (or out, for a queue/topic endpoint)
- * - "backlog": a queue/topic endpoint is holding messages that are not
+ * - "flowing": messages are arriving (or leaving, for a queue/topic endpoint)
+ * - "piling-up": a queue/topic endpoint is holding messages that are not
  *   being drained: spool growing, close to its quota, or nothing going out
  */
-export type ActivityStatus = "unknown" | "idle" | "active" | "backlog";
+export type ActivityStatus = "unknown" | "idle" | "flowing" | "piling-up";
 
 export type SpoolTrend = "growing" | "shrinking" | "steady" | "unknown";
 
@@ -18,12 +19,14 @@ export interface EndpointActivity {
   fillRatio: number | null;
   /** Messages are currently arriving at this endpoint from the topic side. */
   receiving: boolean;
+  /** Messages are currently leaving towards consumers (queues/topic endpoints only). */
+  sending: boolean;
 }
 
-/** At or above this share of its quota a spool counts as a backlog even if it drains. */
-export const BACKLOG_FILL_RATIO = 0.8;
+/** At or above this share of its quota a spool counts as piling up even if it drains. */
+export const PILING_UP_FILL_RATIO = 0.8;
 
-const UNKNOWN: EndpointActivity = { status: "unknown", trend: "unknown", fillRatio: null, receiving: false };
+const UNKNOWN: EndpointActivity = { status: "unknown", trend: "unknown", fillRatio: null, receiving: false, sending: false };
 
 /** The instantaneous rate, falling back to the 1-minute average when the broker omits it. */
 export const effectiveRate = (rate: RateSample): number | null => rate.current ?? rate.oneMinuteAverage;
@@ -52,7 +55,7 @@ export function classifyEndpointActivity(
 
   if (metrics.type === "direct-subscriber") {
     if (!hasRate(metrics.inbound)) return UNKNOWN;
-    return { status: receiving ? "active" : "idle", trend: "unknown", fillRatio: null, receiving };
+    return { status: receiving ? "flowing" : "idle", trend: "unknown", fillRatio: null, receiving, sending: false };
   }
 
   const { usageBytes, quotaBytes } = metrics.spool;
@@ -64,10 +67,10 @@ export function classifyEndpointActivity(
   if (!hasRate(metrics.inbound) && !hasRate(metrics.outbound) && usageBytes === null) return UNKNOWN;
 
   const holdsMessages = (usageBytes ?? 0) > 0;
-  const backlog =
-    holdsMessages && (trend === "growing" || (fillRatio ?? 0) >= BACKLOG_FILL_RATIO || !sending);
-  if (backlog) return { status: "backlog", trend, fillRatio, receiving };
-  return { status: receiving || sending ? "active" : "idle", trend, fillRatio, receiving };
+  const pilingUp =
+    holdsMessages && (trend === "growing" || (fillRatio ?? 0) >= PILING_UP_FILL_RATIO || !sending);
+  if (pilingUp) return { status: "piling-up", trend, fillRatio, receiving, sending };
+  return { status: receiving || sending ? "flowing" : "idle", trend, fillRatio, receiving, sending };
 }
 
 /** Classifies every node that has metrics; `previous` is the prior sample's map. */
