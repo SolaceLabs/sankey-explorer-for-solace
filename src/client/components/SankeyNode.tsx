@@ -16,6 +16,15 @@ const LINE_HEIGHT = 12;
 const DIMMED_OPACITY = 0.35;
 const LIVE_ICON_SIZE = 11;
 const LIVE_ICON_GAP = 5;
+/** Space after the name before the live status that shares its line. */
+const LIVE_STATUS_GAP = 12;
+/**
+ * Advance of one Space Mono character per px of font size (the font is
+ * monospaced, so the name's width follows from its length; sankeyLayout
+ * reserves the label column with a slightly more generous ratio).
+ */
+const NAME_CHAR_ADVANCE = 0.62;
+const NAME_FONT_SIZE = 12;
 
 interface SankeyNodeProps {
   node: LayoutNode<SankeyNodeDatum, SankeyLinkDatum>;
@@ -25,7 +34,7 @@ interface SankeyNodeProps {
   isDimmed: boolean;
   color: string;
   subLines: string[];
-  /** Live status (icon, word, numbers), drawn as the last line under an endpoint. */
+  /** Live status (icon, word, numbers), drawn on the name's line, right after it. */
   liveLine?: LiveStatusLine | null | undefined;
   /** Extra lines for the hover tooltip (live metrics). */
   tooltipLines?: string[];
@@ -60,10 +69,9 @@ export function SankeyNode({
   // Thin, low-value nodes stay easy to hit: min. 10px tall, 2px wider each side.
   const visualHeight = Math.max(1, y1 - y0);
   const hitHeight = Math.max(10, visualHeight);
-  const lineCount = subLines.length + (liveLine ? 1 : 0);
-  const blockStartY = (y0 + y1) / 2 - (lineCount * LINE_HEIGHT) / 2;
-  const liveLineY = blockStartY + (subLines.length + 1) * LINE_HEIGHT;
+  const blockStartY = (y0 + y1) / 2 - (subLines.length * LINE_HEIGHT) / 2;
   const textX = isEndpoint ? x1 + LABEL_OFFSET + (code ? BADGE_WIDTH + BADGE_GAP : 0) : x0 - LABEL_OFFSET;
+  const liveX = textX + label.length * NAME_FONT_SIZE * NAME_CHAR_ADVANCE + LIVE_STATUS_GAP;
   const hover = {
     onMouseEnter: () => onHover(node.id),
     onMouseLeave: () => onHover(null),
@@ -132,7 +140,7 @@ export function SankeyNode({
         y={blockStartY}
         dy="0.32em"
         textAnchor={isEndpoint ? "start" : "end"}
-        fontSize={12}
+        fontSize={NAME_FONT_SIZE}
         fontWeight={isSelected ? 700 : 400}
         fontFamily='"Space Mono", monospace'
         fill={isSelected ? DIAGRAM_COLORS.selected : DIAGRAM_COLORS.label}
@@ -157,8 +165,8 @@ export function SankeyNode({
       ))}
       {liveLine && (
         <g className={`sankey-live sankey-live--${liveLine.status}`} {...hover}>
-          <ActivityIcon status={liveLine.status} size={LIVE_ICON_SIZE} x={textX} y={liveLineY - LIVE_ICON_SIZE / 2} />
-          <text x={textX + LIVE_ICON_SIZE + LIVE_ICON_GAP} y={liveLineY} dy="0.32em" textAnchor="start" fontSize={10}>
+          <ActivityIcon status={liveLine.status} size={LIVE_ICON_SIZE} x={liveX} y={blockStartY - LIVE_ICON_SIZE / 2} />
+          <text x={liveX + LIVE_ICON_SIZE + LIVE_ICON_GAP} y={blockStartY} dy="0.32em" textAnchor="start" fontSize={10}>
             <tspan fontFamily='"Figtree", sans-serif' fontWeight={700} fill={ACTIVITY_COLORS[liveLine.status]}>
               {liveLine.label}
             </tspan>

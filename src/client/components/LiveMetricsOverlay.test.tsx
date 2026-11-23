@@ -37,11 +37,11 @@ describe("SankeyChart - live metrics overlay", () => {
   it("writes each endpoint's status as icon, word and numbers, and styles the links into it", () => {
     const { container } = render(<SankeyChart edges={edges} liveMetrics={liveView()} />);
 
-    // Spool holds messages and nothing goes out: piling up, not just flowing.
-    const pilingUp = container.querySelector(".sankey-live--piling-up")!;
-    expect(pilingUp).toHaveTextContent("Piling up");
-    expect(pilingUp).toHaveTextContent("3.0 MB waiting · 30% full · nothing going out");
-    expect(pilingUp.querySelector(".activity-icon--piling-up")).not.toBeNull();
+    // Spool holds messages and nothing goes out: stale, not just flowing.
+    const stale = container.querySelector(".sankey-live--stale")!;
+    expect(stale).toHaveTextContent("Stale");
+    expect(stale).toHaveTextContent("3.0 MB waiting · 30% full");
+    expect(stale.querySelector(".activity-icon--stale")).not.toBeNull();
     expect(container.querySelector(".sankey-live--idle")).toHaveTextContent("Idle");
     expect(container.querySelectorAll(".sankey-link--flowing")).toHaveLength(1);
     expect(container.querySelectorAll(".sankey-link--idle")).toHaveLength(1);
@@ -60,7 +60,15 @@ describe("SankeyChart - live metrics overlay", () => {
 
   it("puts the status into the node tooltip, so it is not carried by color alone", () => {
     render(<SankeyChart edges={edges} liveMetrics={liveView()} />);
-    expect(screen.getByText(/Live: Piling up/, { selector: "title" })).toBeInTheDocument();
+    expect(screen.getByText(/Live: Stale/, { selector: "title" })).toBeInTheDocument();
+  });
+
+  it("puts the status on the name's line instead of adding a line under it", () => {
+    const { container } = render(<SankeyChart edges={edges} liveMetrics={liveView()} />);
+    const name = screen.getByText("orders-q");
+    const status = container.querySelector(".sankey-live--stale text")!;
+    expect(status.getAttribute("y")).toBe(name.getAttribute("y"));
+    expect(Number(status.getAttribute("x"))).toBeGreaterThan(Number(name.getAttribute("x")));
   });
 
   it("draws nothing extra before the first sample", () => {
@@ -77,7 +85,7 @@ describe("SankeyChart - live metrics overlay", () => {
 
     const panel = screen.getByRole("complementary", { name: "Selection details" });
     const section = within(panel).getByRole("region", { name: "Live metrics" });
-    expect(within(section).getByText("Piling up")).toBeInTheDocument();
+    expect(within(section).getByText("Stale")).toBeInTheDocument();
     expect(within(section).getByText("12 msg/s (1 min avg 10)")).toBeInTheDocument();
     expect(within(section).getByText("10.0 MB (30% used)")).toBeInTheDocument();
   });

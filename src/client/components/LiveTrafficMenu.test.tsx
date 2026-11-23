@@ -68,7 +68,7 @@ describe("LiveTrafficMenu", () => {
     expect(within(menu).getByRole("button", { name: "Update now" })).toBeDisabled();
   });
 
-  it("explains Flowing, Piling up and Idle in the menu", async () => {
+  it("explains Flowing, Piling up, Stale and Idle in the menu", async () => {
     const user = userEvent.setup();
     render(<LiveTrafficMenu polling={polling()} />);
     const menu = await open(user);
@@ -76,7 +76,8 @@ describe("LiveTrafficMenu", () => {
     const legend = within(menu).getByRole("list", { name: "What the labels mean" });
     expect(within(legend).getAllByRole("listitem").map((item) => item.textContent)).toEqual([
       "Flowing: messages are arriving or being delivered right now.",
-      "Piling up: messages wait in the queue and are not being drained.",
+      "Piling up: consumers are working, but the queue still grows or is nearly full.",
+      "Stale: messages wait in the queue and nothing takes them out.",
       "Idle: nothing in, nothing out.",
     ]);
   });

@@ -45,35 +45,37 @@ export const ACTIVITY_LABELS: Record<EndpointActivity["status"], string> = {
   idle: "Idle",
   flowing: "Flowing",
   "piling-up": "Piling up",
+  stale: "Stale",
 };
 
 /** One sentence per status, for the legend and the selection panel. */
 export const ACTIVITY_DESCRIPTIONS: Record<LiveStatusLine["status"], string> = {
   flowing: "messages are arriving or being delivered right now.",
-  "piling-up": "messages wait in the queue and are not being drained.",
+  "piling-up": "consumers are working, but the queue still grows or is nearly full.",
+  stale: "messages wait in the queue and nothing takes them out.",
   idle: "nothing in, nothing out.",
 };
 
-function pilingUpDetail(metrics: Extract<EndpointMetrics, { spool: unknown }>, activity: EndpointActivity): string {
+/** What waits in the spool: size, fill level and trend, whichever is known. */
+function waitingDetail(metrics: Extract<EndpointMetrics, { spool: unknown }>, activity: EndpointActivity): string {
   const parts = [`${formatBytes(metrics.spool.usageBytes)} waiting`];
   if (activity.fillRatio !== null) parts.push(`${formatPercent(activity.fillRatio)} full`);
   if (activity.trend === "growing" || activity.trend === "shrinking") parts.push(activity.trend);
-  else if (!activity.sending) parts.push("nothing going out");
   return parts.join(" · ");
 }
 
 /**
- * The status line under an endpoint, e.g. "Piling up · 80.0 MB waiting ·
- * 80% full · growing", or null when there is nothing known to show. Kept
- * bounded: it sits in the label column, whose width the layout reserves
- * up front (LIVE_STATUS_LINE_TEMPLATE).
+ * The live status drawn next to an endpoint's name, e.g. "Piling up 80.0 MB
+ * waiting · 80% full · growing", or null when there is nothing known to
+ * show. Kept bounded: it shares the name's line in the label column, whose
+ * width the layout reserves up front (LIVE_STATUS_LINE_TEMPLATE).
  */
 export function liveStatusLine(metrics: EndpointMetrics, activity: EndpointActivity): LiveStatusLine | null {
   if (activity.status === "unknown") return null;
   const label = ACTIVITY_LABELS[activity.status];
   if (activity.status === "idle") return { status: "idle", label, detail: "" };
-  if (activity.status === "piling-up" && metrics.type !== "direct-subscriber") {
-    return { status: "piling-up", label, detail: pilingUpDetail(metrics, activity) };
+  if ((activity.status === "piling-up" || activity.status === "stale") && metrics.type !== "direct-subscriber") {
+    return { status: activity.status, label, detail: waitingDetail(metrics, activity) };
   }
   const inbound = `${rate(metrics.inbound)}/s in`;
   const detail = metrics.type === "direct-subscriber" ? inbound : `${inbound} · ${rate(metrics.outbound)}/s out`;
@@ -81,7 +83,7 @@ export function liveStatusLine(metrics: EndpointMetrics, activity: EndpointActiv
 }
 
 /** The widest line liveStatusLine is expected to produce (label and detail) - used to reserve label width. */
-export const LIVE_STATUS_LINE_TEMPLATE = "Piling up  1023.9 MB waiting · 100% full · nothing going out";
+export const LIVE_STATUS_LINE_TEMPLATE = "Piling up  1023.9 MB waiting · 100% full · shrinking";
 
 /** Time of a sample for the toolbar, in the viewer's locale. */
 export const formatSampleTime = (epochMs: number): string =>

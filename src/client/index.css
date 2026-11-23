@@ -35,6 +35,7 @@
      (the SVG needs literals for the export). */
   --activity-flowing: #ABFF88;   /* Bright Green */
   --activity-piling-up: #FCA829; /* Orange - warning */
+  --activity-stale: #E0685C;     /* same as --error: nothing drains the queue */
   --activity-idle: rgba(255, 255, 255, 0.75);
 
   /* Three radii, nothing in between: controls are pills, surfaces (cards,
@@ -1276,6 +1277,10 @@ input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
   color: var(--activity-piling-up);
 }
 
+.activity-label--stale {
+  color: var(--activity-stale);
+}
+
 .activity-label--idle {
   color: var(--text);
 }
@@ -1350,6 +1355,11 @@ input:where(:not([type="checkbox"]):not([type="radio"]):not([type="file"])) {
 .pill--activity-piling-up {
   background: rgba(252, 168, 41, 0.15);
   color: var(--activity-piling-up);
+}
+
+.pill--activity-stale {
+  background: rgba(224, 104, 92, 0.16);
+  color: var(--activity-stale);
 }
 
 .pill--activity-idle,

@@ -38,6 +38,11 @@ All notable changes to this project are documented here
 - Live statuses renamed to Flowing, Piling up and Idle and drawn under each endpoint as icon,
   word and the numbers behind it (e.g. "Piling up · 80.0 MB waiting · 80% full · growing")
   instead of a colored dot.
+- New live status "Stale": a queue/topic endpoint holds messages and nothing goes out. "Piling
+  up" now only means consumers are draining it but the spool still grows or is at least 80%
+  full. The status and its numbers moved onto the endpoint name's line, so live metrics no
+  longer add a line under each endpoint (labels overlapped on short bars); the "nothing going
+  out" note is gone, the status says it.
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
 - Dependabot auto-merge workflow: GitHub's native auto-merge (squash) is enabled for patch and

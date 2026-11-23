@@ -1,14 +1,15 @@
 import type { EndpointMetrics, RateSample } from "../types";
 
 /**
- * The terms are the UI's own ("Flowing", "Piling up", "Idle"):
+ * The terms are the UI's own ("Flowing", "Piling up", "Stale", "Idle"):
  * - "unknown": no usable sample for this endpoint
  * - "idle": known, and no messages moving
  * - "flowing": messages are arriving (or leaving, for a queue/topic endpoint)
- * - "piling-up": a queue/topic endpoint is holding messages that are not
- *   being drained: spool growing, close to its quota, or nothing going out
+ * - "piling-up": a queue/topic endpoint is being drained, but not fast
+ *   enough: its spool grew since the last sample or is close to its quota
+ * - "stale": a queue/topic endpoint holds messages and nothing goes out
  */
-export type ActivityStatus = "unknown" | "idle" | "flowing" | "piling-up";
+export type ActivityStatus = "unknown" | "idle" | "flowing" | "piling-up" | "stale";
 
 export type SpoolTrend = "growing" | "shrinking" | "steady" | "unknown";
 
@@ -67,8 +68,9 @@ export function classifyEndpointActivity(
   if (!hasRate(metrics.inbound) && !hasRate(metrics.outbound) && usageBytes === null) return UNKNOWN;
 
   const holdsMessages = (usageBytes ?? 0) > 0;
-  const pilingUp =
-    holdsMessages && (trend === "growing" || (fillRatio ?? 0) >= PILING_UP_FILL_RATIO || !sending);
+  // Nothing drains a non-empty spool: the worse finding, so it wins.
+  if (holdsMessages && !sending) return { status: "stale", trend, fillRatio, receiving, sending };
+  const pilingUp = holdsMessages && (trend === "growing" || (fillRatio ?? 0) >= PILING_UP_FILL_RATIO);
   if (pilingUp) return { status: "piling-up", trend, fillRatio, receiving, sending };
   return { status: receiving || sending ? "flowing" : "idle", trend, fillRatio, receiving, sending };
 }

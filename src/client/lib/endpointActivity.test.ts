@@ -54,9 +54,15 @@ describe("classifyEndpointActivity", () => {
     expect(classifyEndpointActivity(current, previous)).toMatchObject({ status: "piling-up", trend: "growing", fillRatio: 0.02 });
   });
 
-  it("flags spooled messages that nothing is consuming as 'piling up'", () => {
+  it("calls spooled messages that nothing is consuming 'stale', not 'piling up'", () => {
     const stuck = queueMetrics({ spool: { usageBytes: 512, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
-    expect(classifyEndpointActivity(stuck).status).toBe("piling-up");
+    expect(classifyEndpointActivity(stuck).status).toBe("stale");
+  });
+
+  it("prefers 'stale' over 'piling up' when the spool grows and nothing goes out", () => {
+    const previous = queueMetrics({ spool: { usageBytes: 1 * MB, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
+    const current = queueMetrics({ inbound: rate(80), spool: { usageBytes: 2 * MB, quotaBytes: 100 * MB, unackedMsgCount: 0 } });
+    expect(classifyEndpointActivity(current, previous)).toMatchObject({ status: "stale", trend: "growing" });
   });
 
   it("flags a spool at 80% or more of its quota as 'piling up' even when shrinking", () => {

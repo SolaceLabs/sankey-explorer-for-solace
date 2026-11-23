@@ -41,8 +41,8 @@ that session - never written to disk, never sent anywhere but your broker.
 - Counts queues/topic-endpoints with zero subscriptions in the toolbar
   (hover for their names) instead of quietly dropping them
 - **Live traffic overlay** (opt-in, "Live traffic" in the diagram toolbar) -
-  polls SEMP v2 every 5, 15 or 30 s and writes under each endpoint whether
-  it is *Flowing*, *Piling up* or *Idle*, with the numbers behind it, turns
+  polls SEMP v2 every 5, 15 or 30 s and writes next to each endpoint whether
+  it is *Flowing*, *Piling up*, *Stale* or *Idle*, with the numbers behind it, turns
   links into receiving endpoints green, and shows full details plus an
   on-demand consumer list in the detail panel. See [Live metrics](#live-metrics)
 
@@ -85,11 +85,12 @@ What the overlay reads (SEMP v2 Monitor API, all `vpn/read-only`):
 One poll costs three `select`-limited list requests per Message VPN (more
 only past 100 objects per collection), within the app's usual SEMP throttle.
 
-Status rules: **Flowing** - messages arriving or leaving; **Piling up** - a
-queue/topic endpoint holds messages and its spool grew since the previous
-sample, is at 80% or more of its quota, or nothing is going out (the line
-under the endpoint says which); **Idle** - known, nothing moving. Endpoints
-without a value in the sample get no status line.
+Status rules: **Flowing** - messages arriving or leaving; **Piling up** -
+consumers are draining a queue/topic endpoint, but its spool grew since the
+previous sample or is at 80% or more of its quota; **Stale** - it holds
+messages and nothing goes out; **Idle** - known, nothing moving. The numbers
+next to the status say how much waits, how full it is and whether it grows.
+Endpoints without a value in the sample get no status.
 
 Limits worth knowing, all from SEMP v2 itself:
 

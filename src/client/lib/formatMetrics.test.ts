@@ -64,9 +64,13 @@ describe("liveStatusLine", () => {
     });
   });
 
-  it("says 'nothing going out' for a stuck queue without a trend or quota", () => {
+  it("calls a queue that nothing drains 'Stale' and shows only what waits", () => {
     const metrics = queueMetrics({ spool: { usageBytes: 2048, quotaBytes: null, unackedMsgCount: 0 } });
-    expect(liveStatusLine(metrics, classifyEndpointActivity(metrics))?.detail).toBe("2.0 KB waiting · nothing going out");
+    expect(liveStatusLine(metrics, classifyEndpointActivity(metrics))).toEqual({
+      status: "stale",
+      label: "Stale",
+      detail: "2.0 KB waiting",
+    });
   });
 
   it("shows only the word for idle, only the delivery rate for a direct subscriber, and nothing when unknown", () => {
@@ -81,11 +85,13 @@ describe("liveStatusLine", () => {
   });
 
   it("never produces a line wider than the template the layout reserves", () => {
+    const previous = queueMetrics({ spool: { usageBytes: 1024 * MB, quotaBytes: 1024 * MB, unackedMsgCount: 0 } });
     const metrics = queueMetrics({
-      outbound: { current: 0, oneMinuteAverage: 0 },
+      outbound: { current: 999_949, oneMinuteAverage: null },
       spool: { usageBytes: 1023.9 * MB, quotaBytes: 1024 * MB, unackedMsgCount: 0 },
     });
-    const line = liveStatusLine(metrics, classifyEndpointActivity(metrics))!;
+    const line = liveStatusLine(metrics, classifyEndpointActivity(metrics, previous))!;
+    expect(line.status).toBe("piling-up");
     expect(`${line.label}  ${line.detail}`.length).toBeLessThanOrEqual(LIVE_STATUS_LINE_TEMPLATE.length);
   });
 });

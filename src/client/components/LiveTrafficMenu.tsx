@@ -15,7 +15,7 @@ const CHOICES: { value: UpdateChoice; label: string }[] = [
   ...POLL_INTERVALS_MS.map((ms) => ({ value: ms, label: `${ms / 1000} s` })),
 ];
 
-const LEGEND: LiveStatusLine["status"][] = ["flowing", "piling-up", "idle"];
+const LEGEND: LiveStatusLine["status"][] = ["flowing", "piling-up", "stale", "idle"];
 
 /** Re-renders once a second while mounted - only for the countdown in the open panel. */
 function useNow(): number {

@@ -20,7 +20,7 @@ const LABEL_GAP_PX = 14; // gap between the bar and the start of the text
 // Endpoint labels start after the Q / TE / DS type badge (see SankeyNode):
 // badge width + the gap after it.
 const ENDPOINT_BADGE_SPACE_PX = 34;
-// The live status line starts with its icon (see SankeyNode): icon + gap.
+// The live status starts with its icon (see SankeyNode): icon + gap.
 const LIVE_STATUS_ICON_SPACE_PX = 16;
 
 function estimateWidth(text: string, fontSize: number): number {
@@ -54,7 +54,13 @@ function computeLabelMargins(
 
   for (const id of nodeIds) {
     if (isEndpointNode(id)) {
-      const lineWidths = [estimateWidth(endpointDisplayName(id), MAIN_FONT_SIZE)];
+      // Live metrics change every poll: reserve their widest possible status
+      // (it sits right after the name, see SankeyNode) up front so the
+      // layout does not jump on each sample.
+      const liveStatusWidth = reserveMetricsLine
+        ? estimateWidth(LIVE_STATUS_LINE_TEMPLATE, SUB_FONT_SIZE) + LIVE_STATUS_ICON_SPACE_PX
+        : 0;
+      const lineWidths = [estimateWidth(endpointDisplayName(id), MAIN_FONT_SIZE) + liveStatusWidth];
 
       const owner = endpointOwners?.get(id);
       if (owner) lineWidths.push(estimateWidth(owner, SUB_FONT_SIZE));
@@ -62,11 +68,6 @@ function computeLabelMargins(
       const vpnHost = endpointVpnHost?.get(id);
       if (vpnHost) lineWidths.push(estimateWidth(vpnHost, SUB_FONT_SIZE));
 
-      // Live metrics change every poll: reserve their widest possible line
-      // up front so the layout does not jump on each sample.
-      if (reserveMetricsLine) {
-        lineWidths.push(estimateWidth(LIVE_STATUS_LINE_TEMPLATE, SUB_FONT_SIZE) + LIVE_STATUS_ICON_SPACE_PX);
-      }
 
       maxRightWidth = Math.max(maxRightWidth, Math.max(...lineWidths) + ENDPOINT_BADGE_SPACE_PX);
     } else {
@@ -115,7 +116,7 @@ export function computeSankeyLayout(
   endpointOwners?: Map<string, string>,
   endpointBrokerLabels?: Map<string, string>,
   endpointVpnHost?: Map<string, string>,
-  /** Endpoints show a live metrics line (see SankeyNode) - reserve label width for it. */
+  /** Endpoints show a live status after their name (see SankeyNode) - reserve label width for it. */
   reserveMetricsLine = false,
 ): SankeyGraph<SankeyNodeDatum, SankeyLinkDatum> {
   const { acyclicEdges, removedEdges } = removeCycles(edges);
