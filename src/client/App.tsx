@@ -40,6 +40,8 @@ function App() {
   const [configGeneration, setConfigGeneration] = useState(0);
   const metricsPolling = useMetricsPolling(configGeneration);
   const startConfigLoad = useCallback(() => setConfigGeneration((g) => g + 1), []);
+  // Bumped by the logo: the diagram drops its selection, focus and search.
+  const [overviewRequest, setOverviewRequest] = useState(0);
 
   const loadEndpoints = useCallback(async () => {
     startConfigLoad();
@@ -103,6 +105,15 @@ function App() {
     }
   }
 
+  function handleShowOverview() {
+    if (view.kind === "ready") {
+      setOverviewRequest((n) => n + 1);
+      return;
+    }
+    // From the connection screen (or an error) the overview is the diagram itself.
+    void loadEndpoints();
+  }
+
   async function handleLogout() {
     startConfigLoad();
     await api.logout();
@@ -150,6 +161,7 @@ function App() {
         onLogout={handleLogout}
         onSearchSlotMount={setSearchSlot}
         onExportSlotMount={setExportSlot}
+        onShowOverview={(session?.brokers.length ?? 0) > 0 ? handleShowOverview : undefined}
       />
 
       <main>
@@ -187,6 +199,7 @@ function App() {
               exportSlot={exportSlot}
               liveMetrics={liveMetrics}
               metricsControls={<LiveTrafficMenu polling={metricsPolling} />}
+              overviewRequest={overviewRequest}
             />
           </div>
         )}

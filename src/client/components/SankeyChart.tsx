@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { computeSankeyLayout, type SortMode } from "../lib/sankeyLayout";
 import { buildDisplayEdges, type DiagramViewMode } from "../lib/buildDisplayEdges";
@@ -50,6 +50,12 @@ interface SankeyChartProps {
   metricsControls?: ReactNode;
   /** Node id -> lookup key for the on-demand consumer list of queues/topic endpoints. */
   consumerLookups?: Map<string, ConsumerLookup>;
+  /**
+   * Bumped by the host to go back to the full overview: clears the
+   * selection, "Show only this" and the search. View settings and live
+   * metrics stay as they are.
+   */
+  overviewRequest?: number;
 }
 
 // Below this the columns and labels collide; narrower screens scroll the
@@ -72,6 +78,7 @@ export function SankeyChart({
   liveMetrics,
   metricsControls,
   consumerLookups,
+  overviewRequest = 0,
 }: SankeyChartProps) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -84,6 +91,17 @@ export function SankeyChart({
   const [viewMode, setViewMode] = useState<DiagramViewMode>("dataflow");
   const [showDirectSubscribers, setShowDirectSubscribers] = useState(true);
   const { selection, select } = useDiagramSelection({ edges, viewMode, showDirectSubscribers });
+  // Reset during render (React's "adjusting state when a prop changes"), so
+  // no frame still shows the old selection.
+  const [seenOverviewRequest, setSeenOverviewRequest] = useState(overviewRequest);
+  if (seenOverviewRequest !== overviewRequest) {
+    setSeenOverviewRequest(overviewRequest);
+    select(null);
+  }
+  useEffect(() => {
+    // Back to the overview also means back to its start: the left edge.
+    if (canvasRef.current) canvasRef.current.scrollLeft = 0;
+  }, [overviewRequest]);
 
   const explodedEdges = useMemo(
     () => buildDisplayEdges(edges, { viewMode, showDirectSubscribers }),
@@ -140,7 +158,8 @@ export function SankeyChart({
     );
   }
 
-  const search = <DiagramSearch nodeIds={allNodeIds} onFind={(id) => select(id)} />;
+  // Keyed by the overview request: going back to the overview also empties the search.
+  const search = <DiagramSearch key={overviewRequest} nodeIds={allNodeIds} onFind={(id) => select(id)} />;
   const exportButton = (
     <ExportSvgButton onExport={() => svgRef.current && downloadSvg(svgRef.current, diagramWidth, height)} />
   );

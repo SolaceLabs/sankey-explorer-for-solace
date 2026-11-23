@@ -43,6 +43,8 @@ All notable changes to this project are documented here
   full. The status and its numbers moved onto the endpoint name's line, so live metrics no
   longer add a line under each endpoint (labels overlapped on short bars); the "nothing going
   out" note is gone, the status says it.
+- Clicking the logo or title goes back to the full overview: it closes the selection, ends
+  "Show only this" and empties the search, keeping the view settings and live traffic.
 - CI workflow (lint, typecheck, tests, `npm audit`) on PRs and pushes to `main`.
 - Dependabot for npm, GitHub Actions and Docker.
 - Dependabot auto-merge workflow: GitHub's native auto-merge (squash) is enabled for patch and

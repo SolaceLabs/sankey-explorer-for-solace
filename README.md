@@ -33,7 +33,7 @@ that session - never written to disk, never sent anywhere but your broker.
 - **Click it** (or find it with the search, ⌘K / Ctrl K) to open a detail
   panel: which endpoints a topic reaches, and whether through their own
   subscription or a wider wildcard. "Show only this" then filters the
-  diagram down to that chain
+  diagram down to that chain; clicking the logo goes back to the full overview
 - **Endpoint types at a glance** - Q (queue), TE (topic endpoint) and DS
   (direct subscriber) badges next to every endpoint
 - **Export** the diagram as SVG, or a broker connection as YAML (saved as

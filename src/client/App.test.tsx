@@ -172,7 +172,7 @@ describe("App - topbar actions once connected", () => {
 
     const header = screen.getByRole("banner");
     expect(within(header).getByRole("combobox", { name: "Find topic or endpoint" })).toBeInTheDocument();
-    expect(within(header).getByRole("heading", { name: "Sankey Explorer" })).toBeInTheDocument();
+    expect(within(header).getByRole("heading", { name: /^Sankey Explorer/ })).toBeInTheDocument();
     // Export sits in the top bar, to the right of Refresh.
     const refresh = within(header).getByRole("button", { name: "Refresh" });
     const exportButton = within(header).getByRole("button", { name: "Export SVG" });
@@ -279,5 +279,52 @@ describe("App - live metrics", () => {
     await waitFor(() => expect(screen.queryByText("12/s in · 12/s out")).not.toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Live traffic: off" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("");
+  });
+});
+
+describe("App - back to the overview", () => {
+  it("clicking the logo closes the selection and 'Show only this' but keeps the view settings", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+    const user = userEvent.setup();
+
+    render(<App />);
+    await user.click(await screen.findByText("orders-q"));
+    await user.click(screen.getByRole("button", { name: "Show only this" }));
+    await user.click(screen.getByRole("button", { name: /^View settings/ }));
+    await user.click(screen.getByRole("radio", { name: /Literal subscriptions/ }));
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByText("orders-q"));
+    expect(screen.getByRole("complementary", { name: "Selection details" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /back to the overview/ }));
+
+    expect(screen.queryByRole("complementary", { name: "Selection details" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back to overview" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View settings: Literal subscriptions" })).toBeInTheDocument();
+    expect(api.getEndpoints).toHaveBeenCalledOnce();
+  });
+
+  it("empties the diagram search", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [connectedBroker] }));
+    vi.mocked(api.getEndpoints).mockResolvedValue(oneEndpoint);
+    const user = userEvent.setup();
+
+    render(<App />);
+    await screen.findByText("orders-q");
+    await user.type(screen.getByRole("combobox", { name: "Find topic or endpoint" }), "nothing-like-this");
+
+    await user.click(screen.getByRole("button", { name: /back to the overview/ }));
+
+    expect(screen.getByRole("combobox", { name: "Find topic or endpoint" })).toHaveValue("");
+  });
+
+  it("is only a button once there is a diagram to go back to", async () => {
+    vi.mocked(api.getSession).mockResolvedValue(session({ brokers: [] }));
+
+    render(<App />);
+    await screen.findByText("Connect to Message VPN");
+
+    expect(screen.queryByRole("button", { name: /back to the overview/ })).not.toBeInTheDocument();
   });
 });
