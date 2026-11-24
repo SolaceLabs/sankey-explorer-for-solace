@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { lookup } from "node:dns/promises";
 import request from "supertest";
 import { createServer } from "../server.js";
 
@@ -158,6 +159,21 @@ describe("connection + endpoints (full flow on one session)", () => {
     });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/link-local|metadata/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a hostname that resolves to a cloud-metadata address without ever calling it (SSRF)", async () => {
+    vi.mocked(lookup).mockResolvedValueOnce([{ address: "169.254.169.254", family: 4 }] as never);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await request(app).post("/api/connection").send({
+      baseUrl: "http://metadata.attacker.example",
+      vpn: "default",
+      username: "ro",
+      password: "x",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/resolves to a link-local/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
