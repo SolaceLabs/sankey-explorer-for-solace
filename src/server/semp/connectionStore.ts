@@ -8,7 +8,10 @@ export interface BrokerConnectionInput {
   vpn: string;
   username: string;
   password: string;
-  /** User-friendly name for this broker (e.g. "EU-Broker"). Defaults to the VPN name if omitted. */
+  /**
+   * User-friendly name for this broker (e.g. "EU-Broker"). Defaults to the VPN
+   * name if omitted; made unique within the session (see uniqueBrokerLabel).
+   */
   label?: string;
 }
 
@@ -37,6 +40,21 @@ const connections = new Map<string, Map<string, StoredConnection>>();
  */
 const sessionStartedAt = new Map<string, number>();
 
+/**
+ * `desired`, or `desired #2`, `#3`, ... - the first variant no other
+ * connection in the session uses. The label is the broker's identity
+ * everywhere downstream (node ids, broker colors, the consumers lookup), and
+ * the diagram only adds a broker suffix to node ids when labels differ - so two
+ * brokers with the same VPN name (very often the Solace default "default")
+ * would otherwise merge into one set of nodes.
+ */
+export function uniqueBrokerLabel(desired: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(desired)) return desired;
+  let n = 2;
+  while (taken.has(`${desired} #${n}`)) n++;
+  return `${desired} #${n}`;
+}
+
 function toStatus(conn: StoredConnection): BrokerConnectionStatus {
   return { id: conn.id, label: conn.label, vpn: conn.vpn, baseUrl: conn.baseUrl, connectedAt: conn.connectedAt };
 }
@@ -46,9 +64,11 @@ export function addBrokerConnection(
   input: BrokerConnectionInput,
 ): BrokerConnectionStatus {
   const id = randomUUID();
+  const sessionConnections = connections.get(sessionId) ?? new Map<string, StoredConnection>();
+  const takenLabels = new Set([...sessionConnections.values()].map((c) => c.label));
   const conn: StoredConnection = {
     id,
-    label: input.label?.trim() || input.vpn,
+    label: uniqueBrokerLabel(input.label?.trim() || input.vpn, takenLabels),
     vpn: input.vpn,
     baseUrl: input.baseUrl,
     connectedAt: Date.now(),
@@ -60,7 +80,6 @@ export function addBrokerConnection(
     }),
   };
 
-  const sessionConnections = connections.get(sessionId) ?? new Map();
   sessionConnections.set(id, conn);
   connections.set(sessionId, sessionConnections);
   if (!sessionStartedAt.has(sessionId)) sessionStartedAt.set(sessionId, conn.connectedAt);

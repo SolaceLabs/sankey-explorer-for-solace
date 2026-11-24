@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { lookup } from "node:dns/promises";
 import request from "supertest";
 import { createServer } from "../server.js";
 
@@ -161,6 +162,21 @@ describe("connection + endpoints (full flow on one session)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("rejects a hostname that resolves to a cloud-metadata address without ever calling it (SSRF)", async () => {
+    vi.mocked(lookup).mockResolvedValueOnce([{ address: "169.254.169.254", family: 4 }] as never);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await request(app).post("/api/connection").send({
+      baseUrl: "http://metadata.attacker.example",
+      vpn: "default",
+      username: "ro",
+      password: "x",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/resolves to a link-local/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("400s when the broker ping fails (unreachable/bad credentials)", async () => {
     vi.stubGlobal(
       "fetch",
@@ -307,6 +323,20 @@ describe("connection + endpoints (full flow on one session)", () => {
     expect(res.body.endpoints.every((e: { brokerLabel: string }) => e.brokerLabel === "Good")).toBe(true);
     expect(res.body.errors).toHaveLength(1);
     expect(res.body.errors[0].brokerLabel).toBe("Bad");
+  });
+
+  it("keeps the endpoints of two brokers with the same VPN name apart", async () => {
+    const agent = request.agent(app);
+    for (const host of ["broker-eu", "broker-us"]) {
+      await agent.post("/api/connection").send({
+        baseUrl: `http://${host}:8080`, vpn: "default", username: "ro", password: "x",
+      });
+    }
+
+    const res = await agent.get("/api/endpoints");
+
+    const labels = new Set(res.body.endpoints.map((e: { brokerLabel: string }) => e.brokerLabel));
+    expect(labels).toEqual(new Set(["default", "default #2"]));
   });
 
   it("502s when the SEMP query itself fails after a successful connect", async () => {

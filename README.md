@@ -58,7 +58,9 @@ both unset to run with no login at all. See `.env.example` for every
 available env var (all optional).
 
 **Security note:** with no login, anyone who can reach the app can make *it* call
-broker URLs. Link-local/cloud-metadata addresses are always refused; set
+broker URLs. Link-local/cloud-metadata addresses are always refused, whether given
+directly (in any notation, including IPv4-mapped IPv6) or as a hostname that resolves to
+one. The hostname check runs once when connecting, so it does not stop DNS rebinding; set
 `ALLOWED_BROKER_HOSTS` to restrict connections to your brokers, and `TRUST_PROXY=0`
 when running without a reverse proxy.
 

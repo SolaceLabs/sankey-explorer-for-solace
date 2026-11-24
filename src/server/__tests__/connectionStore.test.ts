@@ -53,6 +53,32 @@ describe("addBrokerConnection / listBrokerConnections", () => {
     expect(labels).toEqual(["A", "B"]);
   });
 
+  it("makes the label unique within a session, so two brokers never merge in the diagram", () => {
+    // Two brokers whose VPN is the Solace default "default" and no label given:
+    // without this both would be "default", and the diagram (which only adds a
+    // broker suffix when labels differ) would merge their endpoints into one node.
+    const sessionId = freshSessionId();
+    const first = addBrokerConnection(sessionId, validInput);
+    const second = addBrokerConnection(sessionId, { ...validInput, baseUrl: "http://other:8080" });
+    const third = addBrokerConnection(sessionId, { ...validInput, label: "default" });
+
+    expect([first.label, second.label, third.label]).toEqual(["default", "default #2", "default #3"]);
+  });
+
+  it("reuses a freed label once its connection is gone", () => {
+    const sessionId = freshSessionId();
+    const first = addBrokerConnection(sessionId, { ...validInput, label: "EU" });
+    removeBrokerConnection(sessionId, first.id);
+    expect(addBrokerConnection(sessionId, { ...validInput, label: "EU" }).label).toBe("EU");
+  });
+
+  it("keeps labels independent between sessions", () => {
+    const sessionA = freshSessionId();
+    const sessionB = freshSessionId();
+    addBrokerConnection(sessionA, validInput);
+    expect(addBrokerConnection(sessionB, validInput).label).toBe("default");
+  });
+
   it("does not leak connections between different sessions", () => {
     const sessionA = freshSessionId();
     const sessionB = freshSessionId();
