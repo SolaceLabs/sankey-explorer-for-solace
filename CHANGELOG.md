@@ -150,6 +150,10 @@ All notable changes to this project are documented here
   Only if every broker fails does the route still answer 502. (Breaking for API consumers.)
 
 ### Fixed
+- Two brokers with the same Message VPN name (for example both `default`, the Solace default)
+  no longer merge into one set of diagram nodes. The server now makes each connection's label
+  unique within the session (`default`, `default #2`, ...), so node ids, broker colors and the
+  consumers lookup (`GET /api/metrics/consumers`, which picked the first match) stay per broker.
 - Removing a Message VPN connection that the server refuses now shows the server's error on
   the connect screen instead of failing silently with an unhandled promise rejection.
 - A failed refresh no longer closes the selection panel: the diagram inputs are derived once per

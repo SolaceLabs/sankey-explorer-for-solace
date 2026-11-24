@@ -309,6 +309,20 @@ describe("connection + endpoints (full flow on one session)", () => {
     expect(res.body.errors[0].brokerLabel).toBe("Bad");
   });
 
+  it("keeps the endpoints of two brokers with the same VPN name apart", async () => {
+    const agent = request.agent(app);
+    for (const host of ["broker-eu", "broker-us"]) {
+      await agent.post("/api/connection").send({
+        baseUrl: `http://${host}:8080`, vpn: "default", username: "ro", password: "x",
+      });
+    }
+
+    const res = await agent.get("/api/endpoints");
+
+    const labels = new Set(res.body.endpoints.map((e: { brokerLabel: string }) => e.brokerLabel));
+    expect(labels).toEqual(new Set(["default", "default #2"]));
+  });
+
   it("502s when the SEMP query itself fails after a successful connect", async () => {
     const agent = request.agent(app);
     await agent.post("/api/connection").send({
