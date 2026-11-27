@@ -104,16 +104,16 @@ That's it! Thank you for your contribution!
 
 Dependabot opens weekly PRs for npm, GitHub Actions and the Docker base image (with a 3-day
 release-age cooldown). The workflow `.github/workflows/dependabot-auto-merge.yml` enables
-GitHub's native **auto-merge (squash)** on those PRs when:
+GitHub's native **auto-merge (squash)** on those PRs, whatever the size of the update (patch,
+minor, **major**, and updates without a semver version such as SHA-pinned workflow refs), when:
 
-* the update is a **patch or minor** version bump,
 * the package did **not** change maintainers, and
 * the PR was opened and last pushed by Dependabot.
 
 GitHub then merges the PR by itself once every **required** status check on `main` has passed. No
-runner waits for the checks. Major updates and updates without a semver version (e.g. SHA-pinned
-workflow refs) stay open for manual review. A PR with a failed check, a merge conflict or a pending
-required review is left open. If anyone other than Dependabot pushes to the PR, or the update stops
+runner waits for the checks. The required checks are therefore the only gate, also for breaking
+major updates: CI has to cover enough to catch them. A PR with a failed check, a merge conflict or
+a pending required review is left open. If anyone other than Dependabot pushes to the PR, or the update stops
 being eligible, the workflow switches auto-merge off again.
 
 Auto-merge is enabled with a **GitHub App token**. A merge done on behalf of `GITHUB_TOKEN` would

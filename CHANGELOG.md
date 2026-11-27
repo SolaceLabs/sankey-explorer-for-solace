@@ -5,6 +5,11 @@ All notable changes to this project are documented here
 
 ## [Unreleased]
 
+### Changed
+- Dependabot auto-merge now covers every update type: major updates and non-semver updates
+  (e.g. SHA-pinned workflow refs) are merged automatically too once all required checks on
+  `main` pass. Updates with a maintainer change and PRs with foreign pushes stay manual.
+
 ### Added
 - Live SEMP v2 metrics API: `GET /api/metrics` returns one telemetry sample (current and
   1-minute-average message rates, spool usage and quota, unacked messages, ingress/egress
