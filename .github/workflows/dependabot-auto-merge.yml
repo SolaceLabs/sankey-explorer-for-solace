@@ -1,10 +1,10 @@
 name: Dependabot auto-merge
 
-# Turns on GitHub's native auto-merge (squash) for Dependabot PRs with patch and minor
-# updates. GitHub then merges on its own as soon as every required status check of `main`
-# (CI `verify`, SCA scan) has passed: the pipeline is never bypassed and no runner sits
-# polling. Major updates, non-semver updates (e.g. SHA-pinned refs without a version) and
-# updates whose package changed maintainers stay open for manual review.
+# Turns on GitHub's native auto-merge (squash) for every Dependabot PR: patch, minor and
+# major updates as well as non-semver updates (e.g. SHA-pinned refs without a version).
+# GitHub then merges on its own as soon as every required status check of `main` (CI
+# `verify`, SCA scan) has passed: the pipeline is the gate, never bypassed, and no runner
+# sits polling. Updates whose package changed maintainers stay open for manual review.
 #
 # Auto-merge is enabled with a GitHub App token, not GITHUB_TOKEN: a merge carried out on
 # behalf of GITHUB_TOKEN triggers no workflow runs, so CI, docker-publish and the SCA
@@ -46,10 +46,10 @@ jobs:
           DEPENDENCIES: ${{ steps.metadata.outputs.dependency-names }}
         run: |
           set -euo pipefail
-          eligible=false
-          case "$UPDATE_TYPE" in
-            version-update:semver-patch | version-update:semver-minor) eligible=true ;;
-          esac
+          # Every update type is eligible, majors and non-semver (SHA-pinned) refs included:
+          # whether an update is safe is decided by the required checks on main, not by the
+          # size of the version jump. UPDATE_TYPE is only logged.
+          eligible=true
           # A new maintainer on a package is a supply-chain signal: review by hand.
           if [ "$MAINTAINER_CHANGES" = "true" ]; then
             eligible=false
@@ -115,7 +115,7 @@ jobs:
         run: gh pr merge --auto --squash --match-head-commit "$HEAD_SHA" "$PR_URL"
 
       # Auto-merge stays on across later pushes. If the PR is no longer eligible (foreign
-      # push, Dependabot switched it to a major version), switch it off again.
+      # push, maintainer change), switch it off again.
       - name: Disable auto-merge for an ineligible PR
         if: always() && steps.policy.outputs.eligible == 'false'
         env:
